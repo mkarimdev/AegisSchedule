@@ -32,6 +32,20 @@ public class IndexModel : PageModel
         }
     }
 
+    public async Task<IActionResult> OnGetLevelsAsync()
+    {
+        try
+        {
+            var levels = await _apiClient.GetLevelsAsync();
+            return new JsonResult(levels);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching academic levels.");
+            return StatusCode(500, new { error = "Failed to fetch academic levels from the API." });
+        }
+    }
+
     public async Task<IActionResult> OnGetOfferingsAsync(int? levelNumber, Guid? termId)
     {
         try

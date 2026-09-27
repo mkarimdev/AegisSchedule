@@ -130,6 +130,17 @@
             color: var(--text-muted);
             font-size: 0.825rem;
         }
+
+        @@media print {
+            header, footer {
+                display: none !important;
+            }
+            main {
+                padding: 0 !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+            }
+        }
     </style>
 </head>
 <body>

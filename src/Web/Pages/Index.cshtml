@@ -12,12 +12,15 @@
         <h1>Build Your Course Schedule</h1>
         <p>Select your academic standing, pick your required courses, and generate a conflict-free weekly timetable.</p>
 
-        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
-        {
-            <div class="alert alert-danger" id="initErrorAlert">
-                <span>@Model.ErrorMessage</span>
+        <div class="alert alert-danger" id="initErrorAlert" style="@(string.IsNullOrEmpty(Model.ErrorMessage) ? "display: none;" : "")">
+            <div class="alert-content">
+                <span id="initErrorMessage">@(Model.ErrorMessage ?? "Could not connect to the scheduling API backend. Please ensure the API is running.")</span>
+                <button type="button" class="btn-retry" id="retryConnectionBtn" onclick="retryConnection()">
+                    <span id="retryBtnText">Retry Connection</span>
+                    <span class="spinner-sm" id="retrySpinner" style="display: none;"></span>
+                </button>
             </div>
-        }
+        </div>
     </div>
 
     <!-- Step 1: Academic Standing & Cohort -->
@@ -88,6 +91,12 @@
             </div>
         </div>
 
+        <!-- Active Selected Courses Summary Chips Bar -->
+        <div class="selected-courses-bar" id="selectedCoursesBar" style="display: none;">
+            <span class="selected-courses-label">Selected Courses:</span>
+            <div class="selected-chips-list" id="selectedChipsList"></div>
+        </div>
+
         <div id="courseLoadingSpinner" class="loading-box" style="display: none;">
             <div class="spinner"></div>
             <span>Loading courses...</span>
@@ -110,6 +119,20 @@
 
     <!-- Step 4: Schedule Results & Weekly Grid -->
     <section class="card results-card" id="resultsSection" style="display: none;">
+        <!-- Print-Only Official Timetable Header -->
+        <div class="print-only-header">
+            <div class="print-header-content">
+                <div>
+                    <h1 class="print-title">UniSchedulingEngine &bull; Official Student Schedule</h1>
+                    <p class="print-subtitle">Minia National University &bull; Academic Year 2026-2027</p>
+                </div>
+                <div class="print-meta-col">
+                    <span id="printScheduleMeta" class="print-meta-primary"></span>
+                    <div class="print-meta-date">Printed on @DateTime.UtcNow.ToString("yyyy-MM-dd")</div>
+                </div>
+            </div>
+        </div>
+
         <div class="results-header">
             <div>
                 <h2>Generated Timetable</h2>
@@ -801,15 +824,333 @@
         animation: spin 0.8s linear infinite;
     }
 
-    @@keyframes spin {
-        to { transform: rotate(360deg); }
+    /* Connection Retry Banner */
+    .alert-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .btn-retry {
+        background: var(--danger);
+        color: white;
+        border: none;
+        padding: 0.35rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.15s;
+    }
+
+    .btn-retry:hover:not(:disabled) {
+        background: #b91c1c;
+    }
+
+    .btn-retry:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    /* Selected Courses Chips Bar */
+    .selected-courses-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.65rem 0.9rem;
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+    }
+
+    .selected-courses-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+
+    .selected-chips-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        align-items: center;
+    }
+
+    .course-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: var(--primary-light);
+        border: 1px solid var(--primary-border);
+        color: var(--primary);
+        padding: 0.2rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.775rem;
+        font-weight: 600;
+    }
+
+    .course-chip-lvl {
+        font-size: 0.7rem;
+        background: rgba(37, 99, 235, 0.12);
+        padding: 0.05rem 0.3rem;
+        border-radius: 4px;
+        color: var(--primary);
+    }
+
+    .chip-remove {
+        background: transparent;
+        border: none;
+        color: var(--primary);
+        cursor: pointer;
+        font-size: 0.9rem;
+        line-height: 1;
+        padding: 0 0.15rem;
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .chip-remove:hover {
+        background: rgba(220, 38, 38, 0.15);
+        color: var(--danger);
+    }
+
+    /* Collision Diagnostics */
+    .status-alert-title {
+        font-weight: 600;
+    }
+
+    .status-alert-tip {
+        margin-top: 0.45rem;
+        font-size: 0.85rem;
+        padding-top: 0.4rem;
+        border-top: 1px dashed rgba(217, 119, 6, 0.3);
+    }
+
+    /* Print Header (hidden on screen) */
+    .print-only-header {
+        display: none;
+    }
+
+    /* Print & PDF Export Stylesheet */
+    @@media print {
+        @@page {
+            size: landscape;
+            margin: 0.8cm;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+            font-size: 10pt !important;
+            line-height: 1.3 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* Hide Non-Print Elements */
+        header, footer, .page-intro, .card:not(.results-card), 
+        .action-box, .pagination-bar, .filter-strip, .selected-courses-bar,
+        .btn-page, .btn-secondary, #initErrorAlert, #statusAlert {
+            display: none !important;
+        }
+
+        main {
+            max-width: 100% !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* Expand Results & Timetable Container */
+        .page-container, .results-card, .timetable-scroll, .timetable-grid {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: visible !important;
+        }
+
+        .results-header {
+            display: none !important;
+        }
+
+        /* Print Header Banner */
+        .print-only-header {
+            display: block !important;
+            margin-bottom: 0.85rem !important;
+            border-bottom: 2px solid #0f172a !important;
+            padding-bottom: 0.5rem !important;
+        }
+
+        .print-header-content {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-end !important;
+        }
+
+        .print-title {
+            font-size: 1.25rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+            margin: 0 !important;
+        }
+
+        .print-subtitle {
+            font-size: 0.825rem !important;
+            color: #475569 !important;
+            margin: 0.15rem 0 0 0 !important;
+        }
+
+        .print-meta-col {
+            text-align: right !important;
+        }
+
+        .print-meta-primary {
+            font-size: 0.85rem !important;
+            font-weight: 600 !important;
+            color: #0f172a !important;
+            display: block !important;
+        }
+
+        .print-meta-date {
+            font-size: 0.725rem !important;
+            color: #64748b !important;
+        }
+
+        /* High-Contrast Grid Formatting */
+        .timetable-grid {
+            border: 1px solid #94a3b8 !important;
+            gap: 1px !important;
+            background: #cbd5e1 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+
+        .grid-cell-header {
+            background: #f1f5f9 !important;
+            color: #0f172a !important;
+            border: 1px solid #94a3b8 !important;
+            font-weight: 700 !important;
+            font-size: 0.8rem !important;
+            padding: 0.4rem !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .time-slot-label {
+            background: #f8fafc !important;
+            color: #334155 !important;
+            border: 1px solid #cbd5e1 !important;
+            font-size: 0.725rem !important;
+            font-weight: 600 !important;
+            padding: 0.35rem !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .grid-cell-empty {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            min-height: 55px !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .grid-cell-meeting {
+            border: 1px solid #64748b !important;
+            box-shadow: none !important;
+            padding: 0.4rem !important;
+            min-height: 55px !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .grid-cell-meeting.type-Lecture { 
+            background: #dbeafe !important; 
+            border-color: #93c5fd !important;
+            color: #1e3a8a !important; 
+        }
+        .grid-cell-meeting.type-Lab { 
+            background: #ede9fe !important; 
+            border-color: #c4b5fd !important;
+            color: #4c1d95 !important; 
+        }
+        .grid-cell-meeting.type-Tutorial { 
+            background: #dcfce7 !important; 
+            border-color: #86efac !important;
+            color: #14532d !important; 
+        }
+
+        .cell-course-code {
+            font-size: 0.825rem !important;
+            font-weight: 700 !important;
+        }
+
+        .cell-act-type {
+            font-size: 0.65rem !important;
+            font-weight: 700 !important;
+            background: rgba(0, 0, 0, 0.08) !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .cell-group-name {
+            font-size: 0.725rem !important;
+        }
+
+        .cell-room {
+            font-size: 0.7rem !important;
+        }
+
+        /* Sections list */
+        .sections-summary {
+            margin-top: 0.85rem !important;
+            padding-top: 0.65rem !important;
+            border-top: 1px solid #94a3b8 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+
+        .sections-summary h3 {
+            font-size: 0.85rem !important;
+            margin-bottom: 0.4rem !important;
+        }
+
+        .section-pill {
+            background: #f8fafc !important;
+            border: 1px solid #cbd5e1 !important;
+            font-size: 0.725rem !important;
+            padding: 0.2rem 0.5rem !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
     }
 </style>
 
 @section Scripts {
 <script>
     let state = {
-        selectedLevel: 1,
+        primaryStandingLevel: 1,
+        browsingLevel: 1,
         assignedPrimaryGroupId: null,
         selectedOfferings: new Set(),
         currentLevelOfferings: [],
@@ -819,11 +1160,14 @@
     };
 
     document.addEventListener("DOMContentLoaded", () => {
-        selectLevel(1);
+        const initialPill = document.querySelector(".level-pill.active");
+        const initialLevel = initialPill ? parseInt(initialPill.dataset.level) : 1;
+        selectLevel(initialLevel);
     });
 
     async function selectLevel(levelNumber) {
-        state.selectedLevel = levelNumber;
+        state.primaryStandingLevel = levelNumber;
+        state.browsingLevel = levelNumber;
 
         document.querySelectorAll(".level-pill").forEach(btn => {
             btn.classList.toggle("active", parseInt(btn.dataset.level) === levelNumber);
@@ -833,11 +1177,22 @@
             b.classList.toggle("active", b.id === `filter-btn-${levelNumber}`);
         });
 
-        await loadOfferingsForLevel(levelNumber);
+        await loadOfferingsForLevel(levelNumber, true);
         updateSelectedCounter();
+        updateSelectedCoursesBar();
     }
 
-    async function loadOfferingsForLevel(levelNumber) {
+    async function toggleBrowseLevel(levelNumber) {
+        state.browsingLevel = levelNumber;
+
+        document.querySelectorAll(".filter-btn").forEach(b => {
+            b.classList.toggle("active", b.id === `filter-btn-${levelNumber}`);
+        });
+
+        await loadOfferingsForLevel(levelNumber, false);
+    }
+
+    async function loadOfferingsForLevel(levelNumber, isPrimaryStanding = false) {
         const spinner = document.getElementById("courseLoadingSpinner");
         const grid = document.getElementById("coursesGrid");
 
@@ -849,15 +1204,23 @@
             if (!response.ok) throw new Error("Failed to load offerings");
 
             const offerings = await response.json();
-            state.currentLevelOfferings = offerings;
-
             offerings.forEach(o => state.allLoadedOfferings.set(o.id, o));
 
-            populateCohortDropdown(offerings);
-            renderCourseCards(offerings);
+            if (isPrimaryStanding) {
+                populateCohortDropdown(offerings);
+            }
+
+            if (levelNumber === state.browsingLevel) {
+                state.currentLevelOfferings = offerings;
+                renderCourseCards(offerings);
+            }
         } catch (err) {
             console.error(err);
-            grid.innerHTML = `<div class="status-alert error">Error loading courses: ${err.message}</div>`;
+            grid.innerHTML = `
+                <div class="status-alert error" style="grid-column: 1 / -1; margin: 1rem 0;">
+                    <div>Error loading courses for Level ${levelNumber}: ${escapeHtml(err.message)}</div>
+                    <button type="button" class="btn-subtle" style="margin-top: 0.5rem;" onclick="loadOfferingsForLevel(${levelNumber}, ${isPrimaryStanding})">Try Again</button>
+                </div>`;
         } finally {
             spinner.style.display = "none";
             grid.style.display = "grid";
@@ -866,13 +1229,13 @@
 
     function populateCohortDropdown(offerings) {
         const select = document.getElementById("cohortSelect");
-        const previousValue = select.value;
+        const previousValue = state.assignedPrimaryGroupId || select.value;
         select.innerHTML = '<option value="">Any Cohort (No Lock)</option>';
 
         const lectureGroups = new Map();
         offerings.forEach(offering => {
             (offering.groups || []).forEach(grp => {
-                if (grp.activityType.toLowerCase() === "lecture") {
+                if (grp.activityType && grp.activityType.toLowerCase() === "lecture") {
                     lectureGroups.set(grp.id, `${grp.name} (${offering.courseCode})`);
                 }
             });
@@ -885,10 +1248,11 @@
             select.appendChild(opt);
         });
 
-        if (lectureGroups.has(previousValue)) {
+        if (previousValue && lectureGroups.has(previousValue)) {
             select.value = previousValue;
             state.assignedPrimaryGroupId = previousValue;
         } else {
+            select.value = "";
             state.assignedPrimaryGroupId = null;
         }
     }
@@ -903,13 +1267,13 @@
         grid.innerHTML = "";
 
         if (!offerings || offerings.length === 0) {
-            grid.innerHTML = `<p class="text-secondary" style="grid-column: 1 / -1; padding: 1.5rem; text-align: center;">No course offerings available for Level ${state.selectedLevel}.</p>`;
+            grid.innerHTML = `<p class="text-secondary" style="grid-column: 1 / -1; padding: 1.5rem; text-align: center;">No course offerings available for Level ${state.browsingLevel}.</p>`;
             return;
         }
 
         offerings.forEach(offering => {
             const isSelected = state.selectedOfferings.has(offering.id);
-            const isCrossLevel = offering.academicLevelNumber !== state.selectedLevel;
+            const isCrossLevel = offering.academicLevelNumber !== state.primaryStandingLevel;
 
             const card = document.createElement("div");
             card.className = `course-card ${isSelected ? "selected" : ""}`;
@@ -956,18 +1320,21 @@
         }
 
         updateSelectedCounter();
+        updateSelectedCoursesBar();
     }
 
     function selectAllCurrentLevel() {
         state.currentLevelOfferings.forEach(o => state.selectedOfferings.add(o.id));
         renderCourseCards(state.currentLevelOfferings);
         updateSelectedCounter();
+        updateSelectedCoursesBar();
     }
 
     function clearCourseSelections() {
         state.selectedOfferings.clear();
         renderCourseCards(state.currentLevelOfferings);
         updateSelectedCounter();
+        updateSelectedCoursesBar();
     }
 
     function updateSelectedCounter() {
@@ -979,12 +1346,96 @@
         generateBtn.disabled = count === 0;
     }
 
-    async function toggleBrowseLevel(levelNumber) {
-        document.querySelectorAll(".filter-btn").forEach(b => {
-            b.classList.toggle("active", b.id === `filter-btn-${levelNumber}`);
-        });
+    function updateSelectedCoursesBar() {
+        const bar = document.getElementById("selectedCoursesBar");
+        const list = document.getElementById("selectedChipsList");
+        if (!bar || !list) return;
 
-        await loadOfferingsForLevel(levelNumber);
+        if (state.selectedOfferings.size === 0) {
+            bar.style.display = "none";
+            list.innerHTML = "";
+            return;
+        }
+
+        bar.style.display = "flex";
+        list.innerHTML = "";
+
+        state.selectedOfferings.forEach(offeringId => {
+            const offering = state.allLoadedOfferings.get(offeringId);
+            const chip = document.createElement("span");
+            chip.className = "course-chip";
+            const code = offering ? escapeHtml(offering.courseCode) : offeringId.substring(0, 6);
+            const lvl = offering ? offering.academicLevelNumber : "?";
+            chip.innerHTML = `
+                <span>${code}</span>
+                <span class="course-chip-lvl">L${lvl}</span>
+                <button type="button" class="chip-remove" onclick="removeSelectedCourse('${offeringId}')" title="Remove ${code}">&times;</button>
+            `;
+            list.appendChild(chip);
+        });
+    }
+
+    function removeSelectedCourse(offeringId) {
+        toggleCourseSelection(offeringId);
+    }
+
+    async function retryConnection() {
+        const btn = document.getElementById("retryConnectionBtn");
+        const btnText = document.getElementById("retryBtnText");
+        const spinner = document.getElementById("retrySpinner");
+        const alertBox = document.getElementById("initErrorAlert");
+        const msgSpan = document.getElementById("initErrorMessage");
+
+        if (btn) btn.disabled = true;
+        if (btnText) btnText.textContent = "Connecting...";
+        if (spinner) spinner.style.display = "inline-block";
+
+        try {
+            const levelContainer = document.getElementById("levelButtonGroup");
+            if (!levelContainer || levelContainer.children.length === 0) {
+                const res = await fetch("/Index?handler=Levels");
+                if (!res.ok) throw new Error("API backend is still unreachable.");
+                const levels = await res.json();
+                populateAcademicLevels(levels);
+            }
+
+            await selectLevel(state.primaryStandingLevel || 1);
+            if (alertBox) alertBox.style.display = "none";
+        } catch (err) {
+            console.error("Retry failed:", err);
+            if (msgSpan) msgSpan.textContent = `Connection retry failed: ${err.message}`;
+        } finally {
+            if (btn) btn.disabled = false;
+            if (btnText) btnText.textContent = "Retry Connection";
+            if (spinner) spinner.style.display = "none";
+        }
+    }
+
+    function populateAcademicLevels(levels) {
+        const pillGroup = document.getElementById("levelButtonGroup");
+        const filterGroup = document.getElementById("crossLevelButtons");
+        if (!pillGroup || !filterGroup || !levels) return;
+
+        pillGroup.innerHTML = "";
+        filterGroup.innerHTML = "";
+
+        levels.forEach(lvl => {
+            const pill = document.createElement("button");
+            pill.type = "button";
+            pill.className = `level-pill ${lvl.levelNumber === state.primaryStandingLevel ? "active" : ""}`;
+            pill.dataset.level = lvl.levelNumber;
+            pill.textContent = `Level ${lvl.levelNumber}`;
+            pill.onclick = () => selectLevel(lvl.levelNumber);
+            pillGroup.appendChild(pill);
+
+            const filterBtn = document.createElement("button");
+            filterBtn.type = "button";
+            filterBtn.className = `filter-btn ${lvl.levelNumber === state.browsingLevel ? "active" : ""}`;
+            filterBtn.id = `filter-btn-${lvl.levelNumber}`;
+            filterBtn.textContent = `Level ${lvl.levelNumber}`;
+            filterBtn.onclick = () => toggleBrowseLevel(lvl.levelNumber);
+            filterGroup.appendChild(filterBtn);
+        });
     }
 
     async function generateSchedule() {
@@ -1002,7 +1453,7 @@
         statusAlert.style.display = "none";
 
         const requestPayload = {
-            academicLevelNumber: state.selectedLevel,
+            academicLevelNumber: state.primaryStandingLevel,
             assignedPrimaryGroupId: state.assignedPrimaryGroupId || null,
             selectedCourseOfferingIds: Array.from(state.selectedOfferings)
         };
@@ -1028,8 +1479,17 @@
 
             if (!data.isSuccess || !data.schedules || data.schedules.length === 0) {
                 statusAlert.className = "status-alert warning";
-                statusAlert.textContent = data.errorMessage || 
-                    `No conflict-free schedules found from ${data.totalCombinationsEvaluated || 0} evaluated combinations. Try changing your cohort lock or unchecking conflicting courses.`;
+                const evalCount = data.totalCombinationsEvaluated || 0;
+                let tipHtml = "";
+                if (state.assignedPrimaryGroupId) {
+                    tipHtml = `<div class="status-alert-tip"><strong>Tip:</strong> Try changing Primary Cohort Lock to <em>"Any Cohort (No Lock)"</em> to allow alternate lecture groups.</div>`;
+                } else {
+                    tipHtml = `<div class="status-alert-tip"><strong>Tip:</strong> Mutually exclusive class times detected across selected courses (${state.selectedOfferings.size} courses). Try unchecking one course to isolate schedule collisions.</div>`;
+                }
+                statusAlert.innerHTML = `
+                    <div class="status-alert-title">${escapeHtml(data.errorMessage) || `No conflict-free schedules found from ${evalCount} evaluated combination${evalCount === 1 ? "" : "s"}.`}</div>
+                    ${tipHtml}
+                `;
                 statusAlert.style.display = "block";
                 resultsSection.style.display = "none";
                 return;
@@ -1039,7 +1499,7 @@
             state.currentScheduleIndex = 0;
 
             statusAlert.className = "status-alert success";
-            statusAlert.textContent = `Found ${data.schedules.length} conflict-free schedule(s) from ${data.totalCombinationsEvaluated} evaluated combinations.`;
+            statusAlert.innerHTML = `<div class="status-alert-title">Found ${data.schedules.length} conflict-free schedule(s) from ${data.totalCombinationsEvaluated} evaluated combinations.</div>`;
             statusAlert.style.display = "block";
 
             renderActiveSchedule();
@@ -1049,7 +1509,7 @@
         } catch (err) {
             console.error(err);
             statusAlert.className = "status-alert error";
-            statusAlert.textContent = `Error: ${err.message}`;
+            statusAlert.innerHTML = `<div class="status-alert-title">Error: ${escapeHtml(err.message)}</div>`;
             statusAlert.style.display = "block";
             resultsSection.style.display = "none";
         } finally {
@@ -1069,11 +1529,16 @@
         const prevBtn = document.getElementById("prevScheduleBtn");
         const nextBtn = document.getElementById("nextScheduleBtn");
         const statsLabel = document.getElementById("resultsStats");
+        const printMeta = document.getElementById("printScheduleMeta");
 
         pageIndicator.textContent = `Schedule ${state.currentScheduleIndex + 1} of ${schedules.length}`;
         prevBtn.disabled = state.currentScheduleIndex === 0;
         nextBtn.disabled = state.currentScheduleIndex === schedules.length - 1;
-        statsLabel.textContent = `${schedule.selectedGroups.length} Scheduled Sections &bull; Option ${state.currentScheduleIndex + 1}`;
+        statsLabel.textContent = `${schedule.selectedGroups.length} Scheduled Sections • Option ${state.currentScheduleIndex + 1}`;
+
+        if (printMeta) {
+            printMeta.textContent = `Level ${state.primaryStandingLevel} • Option ${state.currentScheduleIndex + 1} of ${schedules.length} (${schedule.selectedGroups.length} Sections)`;
+        }
 
         const meetingsList = [];
         (schedule.selectedGroups || []).forEach(group => {
