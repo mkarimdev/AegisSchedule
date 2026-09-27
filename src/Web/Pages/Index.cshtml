@@ -1,0 +1,127 @@
+@page
+@model Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "Student Timetable Builder";
+}
+
+<div class="hero-section">
+    <h1>Generate Your Optimal Academic Timetable</h1>
+    <p class="subtitle">Select your academic level, choose your courses, and let our zero-collision solver compute conflict-free schedules tailored to your cohort.</p>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-warning">
+            <strong>Notice:</strong> @Model.ErrorMessage
+        </div>
+    }
+
+    <div class="card levels-card">
+        <h2>Available Academic Levels</h2>
+        <div class="levels-grid">
+            @if (Model.AcademicLevels.Count > 0)
+            {
+                @foreach (var level in Model.AcademicLevels)
+                {
+                    <div class="level-pill">
+                        <span class="level-number">@level.LevelNumber</span>
+                        <span class="level-name">@level.DisplayName</span>
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="text-muted">No academic levels currently loaded.</p>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .hero-section {
+        max-width: 800px;
+        margin: 2rem auto;
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 2.25rem;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        margin-bottom: 1rem;
+        background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+        color: var(--text-muted);
+        font-size: 1.125rem;
+        margin-bottom: 2rem;
+        line-height: 1.6;
+    }
+
+    .card {
+        background-color: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.75rem;
+        text-align: left;
+        margin-top: 1.5rem;
+    }
+
+    .card h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--text);
+    }
+
+    .levels-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .level-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(37, 99, 235, 0.1);
+        border: 1px solid rgba(37, 99, 235, 0.3);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        color: var(--text);
+        font-weight: 500;
+        font-size: 0.95rem;
+    }
+
+    .level-number {
+        background: var(--primary);
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        text-align: left;
+    }
+
+    .alert-warning {
+        background-color: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        color: #fbbf24;
+    }
+
+    .text-muted {
+        color: var(--text-muted);
+    }
+</style>
