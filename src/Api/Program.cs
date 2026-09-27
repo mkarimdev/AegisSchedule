@@ -1,4 +1,5 @@
 using Api.Persistence;
+using Api.Solver;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,6 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<UniSchedulingDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+builder.Services.AddControllers();
+builder.Services.AddTransient<ScheduleSolver>();
 
 var app = builder.Build();
 
@@ -49,6 +53,8 @@ app.MapGet("/weatherforecast", () =>
         .ToArray();
     return forecast;
 });
+
+app.MapControllers();
 
 app.Run();
 
