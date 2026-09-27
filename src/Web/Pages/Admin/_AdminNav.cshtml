@@ -1,0 +1,56 @@
+@model string
+
+<div class="admin-nav-strip">
+    <div class="admin-nav-links">
+        <a href="/Admin/Courses" class="admin-nav-tab @(Model == "Courses" ? "active" : "")">
+            <span class="tab-label">Courses Catalog</span>
+        </a>
+        <a href="/Admin/Offerings" class="admin-nav-tab @(Model == "Offerings" ? "active" : "")">
+            <span class="tab-label">Terms & Offerings</span>
+        </a>
+        <a href="/Admin/ScheduleSlots" class="admin-nav-tab @(Model == "ScheduleSlots" ? "active" : "")">
+            <span class="tab-label">Slots & Meetings</span>
+        </a>
+    </div>
+</div>
+
+<style>
+    .admin-nav-strip {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1.75rem;
+        padding-bottom: 0.25rem;
+    }
+
+    .admin-nav-links {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .admin-nav-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+
+    .admin-nav-tab:hover {
+        background: var(--surface-hover);
+        color: var(--text);
+    }
+
+    .admin-nav-tab.active {
+        background: var(--primary-light);
+        color: var(--primary);
+        font-weight: 600;
+    }
+</style>

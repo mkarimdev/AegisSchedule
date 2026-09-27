@@ -1,0 +1,459 @@
+@page
+@model Web.Pages.Admin.ScheduleSlotsModel
+@{
+    ViewData["Title"] = "Schedule Slots & Timetable - Admin";
+}
+
+<div class="admin-container">
+    <partial name="_AdminNav" model="@("ScheduleSlots")" />
+
+    <div class="admin-header-row">
+        <div>
+            <h1>Schedule Slots & Meeting Timetabler</h1>
+            <p class="admin-subtitle">Configure instructional activity categories, cohort sections, and meeting time intervals.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">
+            <span>@Model.SuccessMessage</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <span>@Model.ErrorMessage</span>
+        </div>
+    }
+
+    <!-- Offering Selector Toolbar -->
+    <div class="card toolbar-card">
+        <form method="get" class="context-selector-form">
+            <label for="offeringSelect">Select Course Offering:</label>
+            <select id="offeringSelect" name="OfferingId" class="form-select" onchange="this.form.submit()" style="max-width: 520px;">
+                @if (Model.AllOfferings.Count == 0)
+                {
+                    <option value="">No course offerings available</option>
+                }
+                @foreach (var off in Model.AllOfferings)
+                {
+                    <option value="@off.Id" selected="@(Model.OfferingId == off.Id)">
+                        @off.CourseCode - @off.CourseName (@off.TermName &bull; Level @off.AcademicLevelNumber)
+                    </option>
+                }
+            </select>
+        </form>
+    </div>
+
+    @if (Model.OfferingDetail == null)
+    {
+        <div class="card empty-state">
+            <p>Please select a course offering above or create an offering in <a href="/Admin/Offerings">Terms & Offerings</a>.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Offering Summary Header Card -->
+        <div class="card context-summary-card">
+            <div class="context-summary-info">
+                <span class="course-code-badge large">@Model.OfferingDetail.CourseCode</span>
+                <div>
+                    <h2>@Model.OfferingDetail.CourseName</h2>
+                    <p class="text-secondary">@Model.OfferingDetail.TermName &bull; Level @Model.OfferingDetail.AcademicLevelNumber</p>
+                </div>
+            </div>
+
+            <!-- Add Activity Type Dropdown -->
+            @{
+                var existingTypes = Model.OfferingDetail.Activities.Select(a => a.Type).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var allTypes = new[] { Web.Models.ActivityType.Lecture, Web.Models.ActivityType.Lab, Web.Models.ActivityType.Tutorial };
+                var availableTypes = allTypes.Where(t => !existingTypes.Contains(t.ToString())).ToList();
+            }
+
+            @if (availableTypes.Count > 0)
+            {
+                <form method="post" asp-page-handler="CreateActivity" class="add-act-form">
+                    <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                    <select name="type" class="form-select-sm" required>
+                        @foreach (var t in availableTypes)
+                        {
+                            <option value="@t">+ Add @t Category</option>
+                        }
+                    </select>
+                    <button type="submit" class="btn-primary-sm">Add Category</button>
+                </form>
+            }
+        </div>
+
+        @if (Model.OfferingDetail.Activities.Count == 0)
+        {
+            <div class="card empty-state">
+                <p>No activity categories configured yet. Add a <strong>Lecture</strong>, <strong>Lab</strong>, or <strong>Tutorial</strong> category above.</p>
+            </div>
+        }
+
+        <!-- Hierarchical Tree: Activities -> Groups -> Meetings -->
+        @foreach (var activity in Model.OfferingDetail.Activities)
+        {
+            <div class="activity-block card">
+                <div class="activity-block-header">
+                    <div class="activity-title-group">
+                        <span class="badge-act badge-@activity.Type large">@activity.Type</span>
+                        <span class="text-secondary">(@activity.Groups.Count section group@(activity.Groups.Count == 1 ? "" : "s"))</span>
+                    </div>
+
+                    <form method="post" asp-page-handler="DeleteActivity" onsubmit="return confirm('Remove this entire activity category and all its sections?');">
+                        <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                        <input type="hidden" name="activityId" value="@activity.Id" />
+                        <button type="submit" class="btn-subtle text-danger">Remove Activity Category</button>
+                    </form>
+                </div>
+
+                <!-- Add Group Inline Row -->
+                <div class="add-group-row">
+                    <form method="post" asp-page-handler="CreateGroup" class="add-group-form">
+                        <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                        <input type="hidden" name="activityId" value="@activity.Id" />
+                        <input type="text" name="name" class="form-input-sm" placeholder="e.g. Group 1 or Section A" required />
+                        <button type="submit" class="btn-subtle">+ Add Section Group</button>
+                    </form>
+                </div>
+
+                <!-- Groups Grid -->
+                <div class="groups-grid">
+                    @foreach (var group in activity.Groups)
+                    {
+                        <div class="group-card">
+                            <div class="group-card-header">
+                                <span class="group-name">@group.Name</span>
+                                <form method="post" asp-page-handler="DeleteGroup" onsubmit="return confirm('Delete section group \'@group.Name\'?');">
+                                    <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                                    <input type="hidden" name="groupId" value="@group.Id" />
+                                    <button type="submit" class="btn-icon-delete" title="Delete section group">&times;</button>
+                                </form>
+                            </div>
+
+                            <!-- Meetings Table -->
+                            <div class="meetings-container">
+                                @if (group.Meetings.Count == 0)
+                                {
+                                    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">No meeting time slots added yet.</p>
+                                }
+                                else
+                                {
+                                    <table class="meetings-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Day</th>
+                                                <th>Time Interval</th>
+                                                <th>Room</th>
+                                                <th style="width: 30px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var meeting in group.Meetings)
+                                            {
+                                                <tr>
+                                                    <td class="font-semibold">@meeting.DayOfWeek</td>
+                                                    <td>@meeting.StartTime &ndash; @meeting.EndTime</td>
+                                                    <td>@(meeting.Room ?? "TBA")</td>
+                                                    <td style="text-align: right;">
+                                                        <form method="post" asp-page-handler="DeleteMeeting" style="display: inline;">
+                                                            <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                                                            <input type="hidden" name="meetingId" value="@meeting.Id" />
+                                                            <button type="submit" class="btn-icon-delete" title="Delete meeting slot">&times;</button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+
+                                <!-- Add Meeting Inline Form -->
+                                <form method="post" asp-page-handler="CreateMeeting" class="add-meeting-form">
+                                    <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                                    <input type="hidden" name="groupId" value="@group.Id" />
+                                    
+                                    <div class="meeting-form-grid">
+                                        <select name="dayOfWeek" class="form-select-xs" required>
+                                            <option value="Saturday">Saturday</option>
+                                            <option value="Sunday">Sunday</option>
+                                            <option value="Monday">Monday</option>
+                                            <option value="Tuesday">Tuesday</option>
+                                            <option value="Wednesday">Wednesday</option>
+                                            <option value="Thursday">Thursday</option>
+                                            <option value="Friday">Friday</option>
+                                        </select>
+                                        <input type="time" name="startTime" class="form-input-xs" required title="Start Time" />
+                                        <input type="time" name="endTime" class="form-input-xs" required title="End Time" />
+                                        <input type="text" name="room" placeholder="Room (opt)" class="form-input-xs" />
+                                        <button type="submit" class="btn-action edit">+ Add Slot</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .admin-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .admin-header-row h1 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.02em;
+    }
+
+    .admin-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-top: 0.2rem;
+    }
+
+    .toolbar-card {
+        padding: 0.85rem 1.25rem;
+    }
+
+    .context-selector-form {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .context-summary-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding: 1.25rem 1.5rem;
+        background: #f8fafc;
+    }
+
+    .context-summary-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .context-summary-info h2 {
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+
+    .course-code-badge.large {
+        font-size: 1rem;
+        padding: 0.35rem 0.75rem;
+    }
+
+    .add-act-form {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .activity-block {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .activity-block-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.85rem;
+    }
+
+    .activity-title-group {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .badge-act.large {
+        font-size: 0.85rem;
+        padding: 0.25rem 0.65rem;
+    }
+
+    .add-group-row {
+        background: var(--surface-hover);
+        padding: 0.6rem 0.85rem;
+        border-radius: 6px;
+    }
+
+    .add-group-form {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        max-width: 380px;
+    }
+
+    .groups-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1rem;
+    }
+
+    .group-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .group-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 0.5rem;
+    }
+
+    .group-name {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: var(--text);
+    }
+
+    .btn-icon-delete {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1.15rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 0.2rem;
+        border-radius: 4px;
+    }
+
+    .btn-icon-delete:hover {
+        color: var(--danger);
+        background: var(--danger-light);
+    }
+
+    .meetings-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .meetings-table th {
+        background: #f8fafc;
+        padding: 0.35rem 0.5rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+    }
+
+    .meetings-table td {
+        padding: 0.4rem 0.5rem;
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: middle;
+    }
+
+    .add-meeting-form {
+        background: #f8fafc;
+        padding: 0.6rem;
+        border-radius: 6px;
+        border: 1px dashed var(--border);
+    }
+
+    .meeting-form-grid {
+        display: grid;
+        grid-template-columns: 100px 75px 75px 1fr auto;
+        gap: 0.35rem;
+        align-items: center;
+    }
+
+    .form-select-xs, .form-input-xs {
+        padding: 0.25rem 0.4rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 0.775rem;
+        background: var(--surface);
+        color: var(--text);
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .btn-primary-sm {
+        background: var(--primary);
+        color: white;
+        border: none;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .btn-primary-sm:hover {
+        background: var(--primary-hover);
+    }
+
+    .empty-state {
+        padding: 3rem;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .course-code-badge {
+        font-weight: 700;
+        color: var(--primary);
+        background: var(--primary-light);
+        padding: 0.25rem 0.55rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+
+    .badge-act {
+        font-size: 0.725rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+    }
+
+    .badge-Lecture { background: #dbeafe; color: #1e40af; }
+    .badge-Lab { background: #ede9fe; color: #5b21b6; }
+    .badge-Tutorial { background: #dcfce7; color: #166534; }
+
+    .btn-action {
+        background: transparent;
+        border: 1px solid var(--border);
+        padding: 0.25rem 0.55rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .btn-action.edit:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary-border);
+    }
+</style>

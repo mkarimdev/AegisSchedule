@@ -1,0 +1,492 @@
+@page
+@model Web.Pages.Admin.CoursesModel
+@{
+    ViewData["Title"] = "Courses Catalog - Admin";
+}
+
+<div class="admin-container">
+    <partial name="_AdminNav" model="@("Courses")" />
+
+    <div class="admin-header-row">
+        <div>
+            <h1>Courses Catalog</h1>
+            <p class="admin-subtitle">Manage institutional course codes, titles, and assigned academic levels.</p>
+        </div>
+        <button type="button" class="btn-primary" onclick="openCreateModal()">
+            <span>+ Add New Course</span>
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">
+            <span>@Model.SuccessMessage</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <span>@Model.ErrorMessage</span>
+        </div>
+    }
+
+    <!-- Filter & Search Toolbar -->
+    <div class="card toolbar-card">
+        <form method="get" class="filter-form">
+            <div class="form-group-inline">
+                <label for="filterLevel">Level:</label>
+                <select id="filterLevel" name="AcademicLevel" class="form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Levels</option>
+                    @foreach (var lvl in Model.AcademicLevels)
+                    {
+                        <option value="@lvl.LevelNumber" selected="@(Model.AcademicLevel == lvl.LevelNumber)">
+                            Level @lvl.LevelNumber
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group-inline search-group">
+                <input type="text" name="Search" value="@Model.Search" placeholder="Search code or title..." class="form-input-sm" />
+                <button type="submit" class="btn-subtle">Search</button>
+                @if (Model.AcademicLevel.HasValue || !string.IsNullOrEmpty(Model.Search))
+                {
+                    <a href="/Admin/Courses" class="btn-subtle text-muted">Clear</a>
+                }
+            </div>
+        </form>
+    </div>
+
+    <!-- Courses Table -->
+    <div class="card table-card">
+        @if (Model.Courses.Count == 0)
+        {
+            <div class="empty-state">
+                <p>No courses found matching your criteria.</p>
+            </div>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">Code</th>
+                        <th>Course Title</th>
+                        <th style="width: 130px;">Academic Level</th>
+                        <th style="width: 160px; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Model.Courses)
+                    {
+                        <tr>
+                            <td>
+                                <span class="course-code-badge">@c.Code</span>
+                            </td>
+                            <td class="font-semibold">@c.Name</td>
+                            <td>
+                                <span class="level-pill-badge">Level @c.AcademicLevelNumber</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <button type="button" class="btn-action edit" onclick="openEditModal('@c.Id', '@c.Code', '@c.Name', '@c.AcademicLevelId')">Edit</button>
+                                <button type="button" class="btn-action delete" onclick="openDeleteModal('@c.Id', '@c.Code')">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<!-- Modal: Create Course -->
+<div id="createModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Add New Course</h3>
+            <button type="button" class="btn-close" onclick="closeModal('createModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="Create">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="createCode">Course Code</label>
+                    <input type="text" id="createCode" name="code" class="form-input" placeholder="e.g. CS101" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="createName">Course Title</label>
+                    <input type="text" id="createName" name="name" class="form-input" placeholder="e.g. Intro to Computer Science" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="createLevel">Academic Level</label>
+                    <select id="createLevel" name="academicLevelId" class="form-select" required>
+                        <option value="">Select Level...</option>
+                        @foreach (var lvl in Model.AcademicLevels)
+                        {
+                            <option value="@lvl.Id">Level @lvl.LevelNumber</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('createModal')">Cancel</button>
+                <button type="submit" class="btn-primary">Create Course</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Edit Course -->
+<div id="editModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Edit Course</h3>
+            <button type="button" class="btn-close" onclick="closeModal('editModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="Update">
+            <input type="hidden" id="editId" name="id" />
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="editCode">Course Code</label>
+                    <input type="text" id="editCode" name="code" class="form-input" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="editName">Course Title</label>
+                    <input type="text" id="editName" name="name" class="form-input" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="editLevel">Academic Level</label>
+                    <select id="editLevel" name="academicLevelId" class="form-select" required>
+                        @foreach (var lvl in Model.AcademicLevels)
+                        {
+                            <option value="@lvl.Id">Level @lvl.LevelNumber</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('editModal')">Cancel</button>
+                <button type="submit" class="btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Delete Course Confirmation -->
+<div id="deleteModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="text-danger">Delete Course</h3>
+            <button type="button" class="btn-close" onclick="closeModal('deleteModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="Delete">
+            <input type="hidden" id="deleteId" name="id" />
+            <div class="modal-body">
+                <p>Are you sure you want to delete course <strong id="deleteCodePrompt"></strong>?</p>
+                <div class="form-check" style="margin-top: 1rem;">
+                    <label>
+                        <input type="checkbox" name="force" value="true" />
+                        <span>Force delete (cascade delete all active term offerings and sections)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('deleteModal')">Cancel</button>
+                <button type="submit" class="btn-danger">Delete Course</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .admin-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .admin-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .admin-header-row h1 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.02em;
+    }
+
+    .admin-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-top: 0.2rem;
+    }
+
+    .toolbar-card {
+        padding: 0.85rem 1.25rem;
+    }
+
+    .filter-form {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .form-group-inline {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.875rem;
+    }
+
+    .search-group {
+        flex: 1;
+        max-width: 400px;
+        justify-content: flex-end;
+    }
+
+    .form-select-sm, .form-input-sm {
+        padding: 0.4rem 0.65rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 0.85rem;
+        background: var(--surface);
+        color: var(--text);
+    }
+
+    .form-input-sm {
+        width: 100%;
+    }
+
+    .table-card {
+        padding: 0;
+        overflow-x: auto;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        text-align: left;
+    }
+
+    .data-table th {
+        background: var(--surface-hover);
+        padding: 0.75rem 1.25rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .data-table td {
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        vertical-align: middle;
+    }
+
+    .data-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .course-code-badge {
+        font-weight: 700;
+        color: var(--primary);
+        background: var(--primary-light);
+        padding: 0.25rem 0.55rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+
+    .level-pill-badge {
+        font-size: 0.775rem;
+        color: var(--text-secondary);
+        background: #f1f5f9;
+        border: 1px solid var(--border);
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+    }
+
+    .btn-action {
+        background: transparent;
+        border: 1px solid var(--border);
+        padding: 0.3rem 0.65rem;
+        border-radius: 5px;
+        font-size: 0.775rem;
+        cursor: pointer;
+        margin-left: 0.35rem;
+        transition: all 0.15s;
+    }
+
+    .btn-action.edit:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary-border);
+    }
+
+    .btn-action.delete:hover {
+        background: var(--danger-light);
+        color: var(--danger);
+        border-color: var(--danger-border);
+    }
+
+    .empty-state {
+        padding: 3rem;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    /* Modal Backdrop */
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(2px);
+    }
+
+    .modal-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h3 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .btn-close {
+        background: transparent;
+        border: none;
+        font-size: 1.25rem;
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .btn-close:hover {
+        color: var(--text);
+    }
+
+    .modal-body {
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .modal-footer {
+        padding: 0.85rem 1.25rem;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.65rem;
+        background: var(--surface-hover);
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .form-input {
+        padding: 0.55rem 0.85rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 0.9rem;
+        outline: none;
+    }
+
+    .form-input:focus {
+        border-color: var(--primary);
+    }
+
+    .btn-danger {
+        background: var(--danger);
+        color: white;
+        border: none;
+        padding: 0.55rem 1.1rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+    }
+
+    .btn-danger:hover {
+        background: #b91c1c;
+    }
+
+    .alert-success {
+        background: var(--success-light);
+        border: 1px solid var(--success-border);
+        color: var(--success);
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+    }
+
+    .font-semibold {
+        font-weight: 600;
+    }
+</style>
+
+@section Scripts {
+<script>
+    function openCreateModal() {
+        document.getElementById("createCode").value = "";
+        document.getElementById("createName").value = "";
+        document.getElementById("createLevel").selectedIndex = 0;
+        document.getElementById("createModal").style.display = "flex";
+    }
+
+    function openEditModal(id, code, name, academicLevelId) {
+        document.getElementById("editId").value = id;
+        document.getElementById("editCode").value = code;
+        document.getElementById("editName").value = name;
+        document.getElementById("editLevel").value = academicLevelId;
+        document.getElementById("editModal").style.display = "flex";
+    }
+
+    function openDeleteModal(id, code) {
+        document.getElementById("deleteId").value = id;
+        document.getElementById("deleteCodePrompt").textContent = code;
+        document.getElementById("deleteModal").style.display = "flex";
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).style.display = "none";
+    }
+
+    window.onclick = function(event) {
+        if (event.target.classList.contains("modal-backdrop")) {
+            event.target.style.display = "none";
+        }
+    }
+</script>
+}
