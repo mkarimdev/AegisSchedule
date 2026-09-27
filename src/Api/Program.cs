@@ -10,6 +10,24 @@ builder.Services.AddDbContext<UniSchedulingDbContext>(options =>
 
 var app = builder.Build();
 
+// Seed reference database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        var dbContext = services.GetRequiredService<UniSchedulingDbContext>();
+        await DbInitializer.SeedAsync(dbContext);
+        logger.LogInformation("Database migration and reference data seeding completed successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "An error occurred while migrating or seeding the database. Proceeding without active database connection.");
+    }
+}
+
 // Configure the HTTP request pipeline.
 
 app.UseHttpsRedirection();
