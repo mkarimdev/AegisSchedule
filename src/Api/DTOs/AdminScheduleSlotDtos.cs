@@ -1,9 +1,11 @@
+using System.Text.Json.Serialization;
 using Api.Domain;
 
 namespace Api.DTOs;
 
 public class CreateActivityRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public ActivityType Type { get; set; }
 }
 
@@ -19,6 +21,7 @@ public class UpdateActivityGroupRequest
 
 public class CreateMeetingRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DayOfWeek DayOfWeek { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
@@ -27,6 +30,7 @@ public class CreateMeetingRequest
 
 public class UpdateMeetingRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DayOfWeek DayOfWeek { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }

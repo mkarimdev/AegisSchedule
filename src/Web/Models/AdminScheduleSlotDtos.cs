@@ -1,14 +1,18 @@
+using System.Text.Json.Serialization;
+
 namespace Web.Models;
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ActivityType
 {
-    Lecture = 0,
-    Lab = 1,
-    Tutorial = 2
+    Lecture = 1,
+    Lab = 2,
+    Tutorial = 3
 }
 
 public class CreateActivityRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public ActivityType Type { get; set; }
 }
 
@@ -24,6 +28,7 @@ public class UpdateActivityGroupRequest
 
 public class CreateMeetingRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DayOfWeek DayOfWeek { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
@@ -32,6 +37,7 @@ public class CreateMeetingRequest
 
 public class UpdateMeetingRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DayOfWeek DayOfWeek { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }

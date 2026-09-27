@@ -3,12 +3,15 @@
 <div class="admin-nav-strip">
     <div class="admin-nav-links">
         <a href="/Admin/Courses" class="admin-nav-tab @(Model == "Courses" ? "active" : "")">
+            <span class="tab-icon">📚</span>
             <span class="tab-label">Courses Catalog</span>
         </a>
         <a href="/Admin/Offerings" class="admin-nav-tab @(Model == "Offerings" ? "active" : "")">
+            <span class="tab-icon">🗓️</span>
             <span class="tab-label">Terms & Offerings</span>
         </a>
         <a href="/Admin/ScheduleSlots" class="admin-nav-tab @(Model == "ScheduleSlots" ? "active" : "")">
+            <span class="tab-icon">⏱️</span>
             <span class="tab-label">Slots & Meetings</span>
         </a>
     </div>
@@ -20,7 +23,7 @@
         justify-content: space-between;
         align-items: center;
         border-bottom: 1px solid var(--border);
-        margin-bottom: 1.75rem;
+        margin-bottom: 1.5rem;
         padding-bottom: 0.25rem;
     }
 
@@ -33,7 +36,7 @@
     .admin-nav-tab {
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        gap: 0.45rem;
         padding: 0.55rem 1rem;
         border-radius: 8px;
         font-size: 0.875rem;
@@ -41,6 +44,7 @@
         color: var(--text-secondary);
         text-decoration: none;
         transition: all 0.15s ease;
+        border: 1px solid transparent;
     }
 
     .admin-nav-tab:hover {
@@ -52,5 +56,11 @@
         background: var(--primary-light);
         color: var(--primary);
         font-weight: 600;
+        border-color: var(--primary-border);
+    }
+
+    .admin-nav-tab .tab-icon {
+        font-size: 0.95rem;
+        line-height: 1;
     }
 </style>

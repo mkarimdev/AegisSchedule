@@ -35,8 +35,8 @@
     <div class="card toolbar-card">
         <form method="get" class="filter-form">
             <div class="form-group-inline">
-                <label for="filterLevel">Level:</label>
-                <select id="filterLevel" name="AcademicLevel" class="form-select-sm" onchange="this.form.submit()">
+                <label for="filterLevel" class="form-label" style="margin-bottom: 0;">Academic Level:</label>
+                <select id="filterLevel" name="AcademicLevel" class="form-select form-select-sm" onchange="this.form.submit()" style="width: auto; min-width: 140px;">
                     <option value="">All Levels</option>
                     @foreach (var lvl in Model.AcademicLevels)
                     {
@@ -48,11 +48,11 @@
             </div>
 
             <div class="form-group-inline search-group">
-                <input type="text" name="Search" value="@Model.Search" placeholder="Search code or title..." class="form-input-sm" />
-                <button type="submit" class="btn-subtle">Search</button>
+                <input type="text" name="Search" value="@Model.Search" placeholder="Search code or title..." class="form-input form-input-sm" />
+                <button type="submit" class="btn-secondary btn-sm">Search</button>
                 @if (Model.AcademicLevel.HasValue || !string.IsNullOrEmpty(Model.Search))
                 {
-                    <a href="/Admin/Courses" class="btn-subtle text-muted">Clear</a>
+                    <a href="/Admin/Courses" class="btn-subtle btn-sm text-muted">Clear</a>
                 }
             </div>
         </form>
@@ -71,9 +71,9 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th style="width: 120px;">Code</th>
+                        <th style="width: 130px;">Code</th>
                         <th>Course Title</th>
-                        <th style="width: 130px;">Academic Level</th>
+                        <th style="width: 150px;">Academic Level</th>
                         <th style="width: 160px; text-align: right;">Actions</th>
                     </tr>
                 </thead>
@@ -251,19 +251,6 @@
         justify-content: flex-end;
     }
 
-    .form-select-sm, .form-input-sm {
-        padding: 0.4rem 0.65rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 0.85rem;
-        background: var(--surface);
-        color: var(--text);
-    }
-
-    .form-input-sm {
-        width: 100%;
-    }
-
     .table-card {
         padding: 0;
         overflow-x: auto;
@@ -342,113 +329,10 @@
         color: var(--text-muted);
     }
 
-    /* Modal Backdrop */
-    .modal-backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(15, 23, 42, 0.45);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-        backdrop-filter: blur(2px);
-    }
-
-    .modal-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        width: 100%;
-        max-width: 480px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        overflow: hidden;
-    }
-
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem 1.25rem;
-        border-bottom: 1px solid var(--border);
-    }
-
-    .modal-header h3 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text);
-    }
-
-    .btn-close {
-        background: transparent;
-        border: none;
-        font-size: 1.25rem;
-        color: var(--text-muted);
-        cursor: pointer;
-    }
-
-    .btn-close:hover {
-        color: var(--text);
-    }
-
-    .modal-body {
-        padding: 1.25rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    .modal-footer {
-        padding: 0.85rem 1.25rem;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.65rem;
-        background: var(--surface-hover);
-    }
-
     .form-group {
         display: flex;
         flex-direction: column;
         gap: 0.4rem;
-    }
-
-    .form-input {
-        padding: 0.55rem 0.85rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 0.9rem;
-        outline: none;
-    }
-
-    .form-input:focus {
-        border-color: var(--primary);
-    }
-
-    .btn-danger {
-        background: var(--danger);
-        color: white;
-        border: none;
-        padding: 0.55rem 1.1rem;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.875rem;
-        cursor: pointer;
-    }
-
-    .btn-danger:hover {
-        background: #b91c1c;
-    }
-
-    .alert-success {
-        background: var(--success-light);
-        border: 1px solid var(--success-border);
-        color: var(--success);
-        padding: 0.75rem 1rem;
-        border-radius: 8px;
-        font-size: 0.875rem;
     }
 
     .font-semibold {

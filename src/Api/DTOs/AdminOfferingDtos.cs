@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Api.DTOs;
 
 public class CreateOfferingRequest
@@ -35,6 +37,7 @@ public class AdminActivityGroupDetailDto
 public class AdminMeetingDetailDto
 {
     public Guid Id { get; set; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DayOfWeek DayOfWeek { get; set; }
     public string StartTime { get; set; } = string.Empty;
     public string EndTime { get; set; } = string.Empty;

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Api.Persistence;
 using Api.Solver;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +10,11 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<UniSchedulingDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddTransient<ScheduleSolver>();
 
 var app = builder.Build();

@@ -4,6 +4,56 @@
     ViewData["Title"] = "Schedule Slots & Timetable - Admin";
 }
 
+@functions {
+    public static string GetSectionHeader(string activityType) => activityType.ToLowerInvariant() switch
+    {
+        "lecture" => "Lecture Groups",
+        "lab" => "Lab Sections",
+        "tutorial" => "Tutorial Sections",
+        _ => $"{activityType} Sections"
+    };
+
+    public static string GetSectionPlaceholder(string activityType) => activityType.ToLowerInvariant() switch
+    {
+        "lecture" => "e.g. Group 1 or Group A",
+        "lab" => "e.g. Section 1 or Section 18",
+        "tutorial" => "e.g. Section 1",
+        _ => "e.g. Section 1"
+    };
+
+    public static string GetAddButtonLabel(string activityType) => activityType.ToLowerInvariant() switch
+    {
+        "lecture" => "+ Add Lecture Group",
+        "lab" => "+ Add Lab Section",
+        "tutorial" => "+ Add Tutorial Section",
+        _ => "+ Add Section"
+    };
+
+    public static string FormatSectionTitle(string activityType, string groupName)
+    {
+        var clean = groupName?.Trim() ?? "";
+        return activityType.ToLowerInvariant() switch
+        {
+            "lecture" => clean.StartsWith("Lecture Group", StringComparison.OrdinalIgnoreCase)
+                ? clean
+                : clean.StartsWith("Group", StringComparison.OrdinalIgnoreCase)
+                    ? $"Lecture {clean}"
+                    : $"Lecture Group {clean}",
+            "lab" => clean.StartsWith("Lab Section", StringComparison.OrdinalIgnoreCase)
+                ? clean
+                : clean.StartsWith("Section", StringComparison.OrdinalIgnoreCase)
+                    ? $"Lab {clean}"
+                    : $"Lab Section {clean}",
+            "tutorial" => clean.StartsWith("Tutorial Section", StringComparison.OrdinalIgnoreCase)
+                ? clean
+                : clean.StartsWith("Section", StringComparison.OrdinalIgnoreCase)
+                    ? $"Tutorial {clean}"
+                    : $"Tutorial Section {clean}",
+            _ => $"{activityType} {clean}"
+        };
+    }
+}
+
 <div class="admin-container">
     <partial name="_AdminNav" model="@("ScheduleSlots")" />
 
@@ -31,8 +81,8 @@
     <!-- Offering Selector Toolbar -->
     <div class="card toolbar-card">
         <form method="get" class="context-selector-form">
-            <label for="offeringSelect">Select Course Offering:</label>
-            <select id="offeringSelect" name="OfferingId" class="form-select" onchange="this.form.submit()" style="max-width: 520px;">
+            <label for="offeringSelect" class="form-label" style="margin-bottom: 0;">Select Course Offering:</label>
+            <select id="offeringSelect" name="OfferingId" class="form-select form-select-sm" onchange="this.form.submit()" style="max-width: 520px;">
                 @if (Model.AllOfferings.Count == 0)
                 {
                     <option value="">No course offerings available</option>
@@ -50,7 +100,7 @@
     @if (Model.OfferingDetail == null)
     {
         <div class="card empty-state">
-            <p>Please select a course offering above or create an offering in <a href="/Admin/Offerings">Terms & Offerings</a>.</p>
+            <p>Please select a course offering above or create an offering in <a href="/Admin/Offerings" style="color: var(--primary); font-weight: 600;">Terms & Offerings</a>.</p>
         </div>
     }
     else
@@ -61,7 +111,7 @@
                 <span class="course-code-badge large">@Model.OfferingDetail.CourseCode</span>
                 <div>
                     <h2>@Model.OfferingDetail.CourseName</h2>
-                    <p class="text-secondary">@Model.OfferingDetail.TermName &bull; Level @Model.OfferingDetail.AcademicLevelNumber</p>
+                    <p class="text-secondary" style="font-size: 0.875rem;">@Model.OfferingDetail.TermName &bull; Level @Model.OfferingDetail.AcademicLevelNumber</p>
                 </div>
             </div>
 
@@ -76,13 +126,13 @@
             {
                 <form method="post" asp-page-handler="CreateActivity" class="add-act-form">
                     <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
-                    <select name="type" class="form-select-sm" required>
+                    <select name="type" class="form-select form-select-sm" required style="width: auto;">
                         @foreach (var t in availableTypes)
                         {
-                            <option value="@t">+ Add @t Category</option>
+                            <option value="@((int)t)">+ Add @t Category</option>
                         }
                     </select>
-                    <button type="submit" class="btn-primary-sm">Add Category</button>
+                    <button type="submit" class="btn-primary btn-sm">+ Add Category</button>
                 </form>
             }
         </div>
@@ -101,14 +151,13 @@
                 <div class="activity-block-header">
                     <div class="activity-title-group">
                         <span class="badge-act badge-@activity.Type large">@activity.Type</span>
-                        <span class="text-secondary">(@activity.Groups.Count section group@(activity.Groups.Count == 1 ? "" : "s"))</span>
+                        <h3 class="activity-section-header">@GetSectionHeader(activity.Type)</h3>
+                        <span class="text-secondary" style="font-size: 0.85rem;">(@activity.Groups.Count @(activity.Type.Equals("Lecture", StringComparison.OrdinalIgnoreCase) ? "group" : "section")@(activity.Groups.Count == 1 ? "" : "s"))</span>
                     </div>
 
-                    <form method="post" asp-page-handler="DeleteActivity" onsubmit="return confirm('Remove this entire activity category and all its sections?');">
-                        <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
-                        <input type="hidden" name="activityId" value="@activity.Id" />
-                        <button type="submit" class="btn-subtle text-danger">Remove Activity Category</button>
-                    </form>
+                    <button type="button" class="btn-subtle text-danger" onclick="openDeleteActivityModal('@activity.Id', '@activity.Type')">
+                        Remove Activity Category
+                    </button>
                 </div>
 
                 <!-- Add Group Inline Row -->
@@ -116,8 +165,8 @@
                     <form method="post" asp-page-handler="CreateGroup" class="add-group-form">
                         <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
                         <input type="hidden" name="activityId" value="@activity.Id" />
-                        <input type="text" name="name" class="form-input-sm" placeholder="e.g. Group 1 or Section A" required />
-                        <button type="submit" class="btn-subtle">+ Add Section Group</button>
+                        <input type="text" name="name" class="form-input form-input-sm" placeholder="@GetSectionPlaceholder(activity.Type)" required />
+                        <button type="submit" class="btn-secondary btn-sm">@GetAddButtonLabel(activity.Type)</button>
                     </form>
                 </div>
 
@@ -125,14 +174,11 @@
                 <div class="groups-grid">
                     @foreach (var group in activity.Groups)
                     {
+                        var sectionTitle = FormatSectionTitle(activity.Type, group.Name);
                         <div class="group-card">
                             <div class="group-card-header">
-                                <span class="group-name">@group.Name</span>
-                                <form method="post" asp-page-handler="DeleteGroup" onsubmit="return confirm('Delete section group \'@group.Name\'?');">
-                                    <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
-                                    <input type="hidden" name="groupId" value="@group.Id" />
-                                    <button type="submit" class="btn-icon-delete" title="Delete section group">&times;</button>
-                                </form>
+                                <span class="group-name">@sectionTitle</span>
+                                <button type="button" class="btn-icon-delete" title="Delete section group" onclick="openDeleteGroupModal('@group.Id', '@sectionTitle')">&times;</button>
                             </div>
 
                             <!-- Meetings Table -->
@@ -158,13 +204,9 @@
                                                 <tr>
                                                     <td class="font-semibold">@meeting.DayOfWeek</td>
                                                     <td>@meeting.StartTime &ndash; @meeting.EndTime</td>
-                                                    <td>@(meeting.Room ?? "TBA")</td>
+                                                    <td>@(string.IsNullOrWhiteSpace(meeting.Room) ? "TBA" : meeting.Room)</td>
                                                     <td style="text-align: right;">
-                                                        <form method="post" asp-page-handler="DeleteMeeting" style="display: inline;">
-                                                            <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
-                                                            <input type="hidden" name="meetingId" value="@meeting.Id" />
-                                                            <button type="submit" class="btn-icon-delete" title="Delete meeting slot">&times;</button>
-                                                        </form>
+                                                        <button type="button" class="btn-icon-delete" title="Delete meeting slot" onclick="openDeleteMeetingModal('@meeting.Id', '@meeting.DayOfWeek (@meeting.StartTime - @meeting.EndTime)')">&times;</button>
                                                     </td>
                                                 </tr>
                                             }
@@ -172,25 +214,49 @@
                                     </table>
                                 }
 
-                                <!-- Add Meeting Inline Form -->
+                                <!-- Quick Preset Periods & Add Meeting Form -->
+                                <div class="preset-times-bar">
+                                    <span class="preset-label">Standard Periods:</span>
+                                    <div class="preset-buttons">
+                                        <button type="button" class="btn-preset" onclick="fillTimePreset(this, '09:00', '11:00')">09:00 &ndash; 11:00</button>
+                                        <button type="button" class="btn-preset" onclick="fillTimePreset(this, '11:00', '13:00')">11:00 &ndash; 13:00</button>
+                                        <button type="button" class="btn-preset" onclick="fillTimePreset(this, '13:00', '15:00')">13:00 &ndash; 15:00</button>
+                                    </div>
+                                </div>
+
                                 <form method="post" asp-page-handler="CreateMeeting" class="add-meeting-form">
                                     <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
                                     <input type="hidden" name="groupId" value="@group.Id" />
                                     
                                     <div class="meeting-form-grid">
-                                        <select name="dayOfWeek" class="form-select-xs" required>
-                                            <option value="Saturday">Saturday</option>
-                                            <option value="Sunday">Sunday</option>
-                                            <option value="Monday">Monday</option>
-                                            <option value="Tuesday">Tuesday</option>
-                                            <option value="Wednesday">Wednesday</option>
-                                            <option value="Thursday">Thursday</option>
-                                            <option value="Friday">Friday</option>
-                                        </select>
-                                        <input type="time" name="startTime" class="form-input-xs" required title="Start Time" />
-                                        <input type="time" name="endTime" class="form-input-xs" required title="End Time" />
-                                        <input type="text" name="room" placeholder="Room (opt)" class="form-input-xs" />
-                                        <button type="submit" class="btn-action edit">+ Add Slot</button>
+                                        <div>
+                                            <label class="field-micro-label">Day</label>
+                                            <select name="dayOfWeek" class="form-select form-select-xs" required>
+                                                <option value="Saturday">Saturday</option>
+                                                <option value="Sunday">Sunday</option>
+                                                <option value="Monday">Monday</option>
+                                                <option value="Tuesday">Tuesday</option>
+                                                <option value="Wednesday">Wednesday</option>
+                                                <option value="Thursday">Thursday</option>
+                                                <option value="Friday">Friday</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="field-micro-label">Start Time</label>
+                                            <input type="time" name="startTime" class="form-input form-input-xs time-picker-input" value="09:00" required title="Start Time" />
+                                        </div>
+                                        <div>
+                                            <label class="field-micro-label">End Time</label>
+                                            <input type="time" name="endTime" class="form-input form-input-xs time-picker-input" value="11:00" required title="End Time" />
+                                        </div>
+                                        <div>
+                                            <label class="field-micro-label">Room</label>
+                                            <input type="text" name="room" placeholder="e.g. Lab 3" class="form-input form-input-xs" />
+                                        </div>
+                                        <div>
+                                            <label class="field-micro-label">&nbsp;</label>
+                                            <button type="submit" class="btn-primary btn-xs btn-add-slot">+ Add Slot</button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -200,6 +266,71 @@
             </div>
         }
     }
+</div>
+
+<!-- Modal: Delete Activity Category Confirmation -->
+<div id="deleteActivityModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="text-danger">Remove Activity Category</h3>
+            <button type="button" class="btn-close" onclick="closeModal('deleteActivityModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="DeleteActivity">
+            <input type="hidden" name="offeringId" value="@Model.OfferingDetail?.Id" />
+            <input type="hidden" id="deleteActivityId" name="activityId" />
+            <div class="modal-body">
+                <p>Are you sure you want to remove the <strong id="deleteActivityName"></strong> category?</p>
+                <p class="text-danger" style="font-size: 0.85rem; margin-top: 0.5rem;">This will permanently remove all section groups and scheduled meeting intervals in this category.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('deleteActivityModal')">Cancel</button>
+                <button type="submit" class="btn-danger">Remove Category</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Delete Section Group Confirmation -->
+<div id="deleteGroupModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="text-danger">Delete Section Group</h3>
+            <button type="button" class="btn-close" onclick="closeModal('deleteGroupModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="DeleteGroup">
+            <input type="hidden" name="offeringId" value="@Model.OfferingDetail?.Id" />
+            <input type="hidden" id="deleteGroupId" name="groupId" />
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteGroupName"></strong>?</p>
+                <p class="text-secondary" style="font-size: 0.85rem; margin-top: 0.5rem;">All scheduled meeting time slots associated with this section will be deleted.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('deleteGroupModal')">Cancel</button>
+                <button type="submit" class="btn-danger">Delete Section</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Delete Meeting Slot Confirmation -->
+<div id="deleteMeetingModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="text-danger">Delete Meeting Slot</h3>
+            <button type="button" class="btn-close" onclick="closeModal('deleteMeetingModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="DeleteMeeting">
+            <input type="hidden" name="offeringId" value="@Model.OfferingDetail?.Id" />
+            <input type="hidden" id="deleteMeetingId" name="meetingId" />
+            <div class="modal-body">
+                <p>Are you sure you want to remove the meeting slot for <strong id="deleteMeetingDetails"></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('deleteMeetingModal')">Cancel</button>
+                <button type="submit" class="btn-danger">Delete Slot</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <style>
@@ -287,6 +418,13 @@
         gap: 0.75rem;
     }
 
+    .activity-section-header {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text);
+        margin: 0;
+    }
+
     .badge-act.large {
         font-size: 0.85rem;
         padding: 0.25rem 0.65rem;
@@ -302,12 +440,12 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        max-width: 380px;
+        max-width: 440px;
     }
 
     .groups-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
         gap: 1rem;
     }
 
@@ -342,13 +480,57 @@
         font-size: 1.15rem;
         line-height: 1;
         cursor: pointer;
-        padding: 0 0.2rem;
+        padding: 0.15rem 0.35rem;
         border-radius: 4px;
+        transition: all 0.15s ease;
     }
 
     .btn-icon-delete:hover {
         color: var(--danger);
         background: var(--danger-light);
+    }
+
+    .preset-times-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.5rem;
+        padding-top: 0.15rem;
+    }
+
+    .preset-label {
+        font-size: 0.725rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        margin-right: 0.15rem;
+    }
+
+    .preset-buttons {
+        display: flex;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-preset {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 0.2rem 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+
+    .btn-preset:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary-border);
     }
 
     .meetings-table {
@@ -375,43 +557,36 @@
 
     .add-meeting-form {
         background: #f8fafc;
-        padding: 0.6rem;
-        border-radius: 6px;
+        padding: 0.75rem;
+        border-radius: 8px;
         border: 1px dashed var(--border);
     }
 
     .meeting-form-grid {
         display: grid;
-        grid-template-columns: 100px 75px 75px 1fr auto;
-        gap: 0.35rem;
-        align-items: center;
+        grid-template-columns: minmax(100px, 1.2fr) minmax(105px, 1fr) minmax(105px, 1fr) minmax(85px, 1fr) auto;
+        gap: 0.45rem;
+        align-items: end;
     }
 
-    .form-select-xs, .form-input-xs {
-        padding: 0.25rem 0.4rem;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 0.775rem;
-        background: var(--surface);
-        color: var(--text);
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .btn-primary-sm {
-        background: var(--primary);
-        color: white;
-        border: none;
-        padding: 0.4rem 0.8rem;
-        border-radius: 6px;
-        font-size: 0.825rem;
+    .field-micro-label {
+        display: block;
+        font-size: 0.7rem;
         font-weight: 600;
-        cursor: pointer;
-        white-space: nowrap;
+        color: var(--text-muted);
+        margin-bottom: 0.2rem;
     }
 
-    .btn-primary-sm:hover {
-        background: var(--primary-hover);
+    .time-picker-input {
+        min-width: 105px;
+        font-variant-numeric: tabular-nums;
+        padding: 0.35rem 0.5rem;
+    }
+
+    .btn-add-slot {
+        height: 31px;
+        white-space: nowrap;
+        padding: 0 0.75rem;
     }
 
     .empty-state {
@@ -437,23 +612,52 @@
         border-radius: 4px;
     }
 
-    .badge-Lecture { background: #dbeafe; color: #1e40af; }
-    .badge-Lab { background: #ede9fe; color: #5b21b6; }
-    .badge-Tutorial { background: #dcfce7; color: #166534; }
+    .badge-Lecture { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    .badge-Lab { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+    .badge-Tutorial { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
 
-    .btn-action {
-        background: transparent;
-        border: 1px solid var(--border);
-        padding: 0.25rem 0.55rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .btn-action.edit:hover {
-        background: var(--primary-light);
-        color: var(--primary);
-        border-color: var(--primary-border);
+    .font-semibold {
+        font-weight: 600;
     }
 </style>
+
+@section Scripts {
+<script>
+    function fillTimePreset(btn, start, end) {
+        const container = btn.closest('.meetings-container') || btn.closest('.group-card');
+        if (!container) return;
+        const startInput = container.querySelector('input[name="startTime"]');
+        const endInput = container.querySelector('input[name="endTime"]');
+        if (startInput) startInput.value = start;
+        if (endInput) endInput.value = end;
+    }
+
+    function openDeleteActivityModal(activityId, activityType) {
+        document.getElementById("deleteActivityId").value = activityId;
+        document.getElementById("deleteActivityName").textContent = activityType;
+        document.getElementById("deleteActivityModal").style.display = "flex";
+    }
+
+    function openDeleteGroupModal(groupId, groupTitle) {
+        document.getElementById("deleteGroupId").value = groupId;
+        document.getElementById("deleteGroupName").textContent = groupTitle;
+        document.getElementById("deleteGroupModal").style.display = "flex";
+    }
+
+    function openDeleteMeetingModal(meetingId, dayTimeRoom) {
+        document.getElementById("deleteMeetingId").value = meetingId;
+        document.getElementById("deleteMeetingDetails").textContent = dayTimeRoom;
+        document.getElementById("deleteMeetingModal").style.display = "flex";
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).style.display = "none";
+    }
+
+    window.onclick = function(event) {
+        if (event.target.classList.contains("modal-backdrop")) {
+            event.target.style.display = "none";
+        }
+    }
+</script>
+}
