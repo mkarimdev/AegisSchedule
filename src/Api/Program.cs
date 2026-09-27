@@ -1,6 +1,12 @@
+using Api.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<UniSchedulingDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 var app = builder.Build();
 
