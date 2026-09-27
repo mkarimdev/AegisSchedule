@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Web.Models;
 using Web.Services;
@@ -26,8 +27,41 @@ public class IndexModel : PageModel
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to load academic levels from API.");
-            ErrorMessage = "Could not connect to the scheduling API. Please verify the API backend is running.";
+            _logger.LogWarning(ex, "Failed to load academic levels on initial page load.");
+            ErrorMessage = "Could not connect to the scheduling API backend. Please ensure the API is running.";
+        }
+    }
+
+    public async Task<IActionResult> OnGetOfferingsAsync(int? levelNumber, Guid? termId)
+    {
+        try
+        {
+            var offerings = await _apiClient.GetOfferingsAsync(levelNumber, termId);
+            return new JsonResult(offerings);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching offerings for level {LevelNumber}", levelNumber);
+            return StatusCode(500, new { error = "Failed to fetch offerings from the scheduling API." });
+        }
+    }
+
+    public async Task<IActionResult> OnPostGenerateAsync([FromBody] GenerateScheduleRequest request)
+    {
+        if (request == null)
+        {
+            return BadRequest(new { error = "Request payload cannot be empty." });
+        }
+
+        try
+        {
+            var result = await _apiClient.GenerateSchedulesAsync(request);
+            return new JsonResult(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating schedules.");
+            return StatusCode(500, new { error = "Failed to compute schedules from the API." });
         }
     }
 }

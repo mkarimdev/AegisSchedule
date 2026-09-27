@@ -4,124 +4,1269 @@
     ViewData["Title"] = "Student Timetable Builder";
 }
 
-<div class="hero-section">
-    <h1>Generate Your Optimal Academic Timetable</h1>
-    <p class="subtitle">Select your academic level, choose your courses, and let our zero-collision solver compute conflict-free schedules tailored to your cohort.</p>
+@Html.AntiForgeryToken()
 
-    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
-    {
-        <div class="alert alert-warning">
-            <strong>Notice:</strong> @Model.ErrorMessage
+<div class="app-container">
+    <!-- Header Hero -->
+    <div class="hero-header">
+        <div class="hero-badge">University Scheduling Engine</div>
+        <h1>Conflict-Free Schedule Generator</h1>
+        <p class="hero-subtitle">
+            Configure your academic standing, select your required and elective courses, and let our zero-collision engine generate optimal weekly schedules tailored to your cohort.
+        </p>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="alert alert-danger" id="initErrorAlert">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>@Model.ErrorMessage</span>
+            </div>
+        }
+    </div>
+
+    <!-- Step 1: Academic Standing & Cohort -->
+    <section class="config-card">
+        <div class="section-title">
+            <span class="step-num">1</span>
+            <div>
+                <h2>Academic Standing & Cohort Group</h2>
+                <p>Select your current academic level and your assigned lecture cohort (if applicable).</p>
+            </div>
         </div>
-    }
 
-    <div class="card levels-card">
-        <h2>Available Academic Levels</h2>
-        <div class="levels-grid">
-            @if (Model.AcademicLevels.Count > 0)
-            {
+        <div class="config-grid">
+            <div class="form-group">
+                <label class="form-label">Academic Level</label>
+                <div class="level-btn-group" id="levelButtonGroup">
+                    @foreach (var level in Model.AcademicLevels)
+                    {
+                        <button type="button" 
+                                class="level-btn @(level.LevelNumber == 1 ? "active" : "")" 
+                                data-level="@level.LevelNumber"
+                                onclick="selectLevel(@level.LevelNumber)">
+                            <span class="level-icon">@level.LevelNumber</span>
+                            <span>@level.DisplayName</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="cohortSelect">
+                    Primary Cohort Lock
+                    <span class="tooltip-icon" title="For same-level courses, locks lecture assignments to your designated section. Cross-level courses remain flexible.">ⓘ</span>
+                </label>
+                <select id="cohortSelect" class="form-select" onchange="onCohortChange()">
+                    <option value="">No Cohort Lock (Evaluate All Sections)</option>
+                </select>
+                <span class="form-hint" id="cohortHint">Select your assigned lecture cohort for this academic year.</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 2: Course Selection -->
+    <section class="config-card">
+        <div class="section-title-between">
+            <div class="section-title">
+                <span class="step-num">2</span>
+                <div>
+                    <h2>Course Offering Selection</h2>
+                    <p>Select the courses you intend to enroll in for this term.</p>
+                </div>
+            </div>
+            <div class="selection-controls">
+                <span class="selected-pill" id="selectedCountBadge">0 Courses Selected</span>
+                <button type="button" class="btn-ghost" onclick="selectAllCurrentLevel()">Select All Current Level</button>
+                <button type="button" class="btn-ghost text-danger" onclick="clearCourseSelections()">Clear All</button>
+            </div>
+        </div>
+
+        <!-- Cross-Level Browse Dropdown -->
+        <div class="cross-level-bar">
+            <span class="cross-level-label">Browse other levels:</span>
+            <div class="cross-level-buttons" id="crossLevelButtons">
                 @foreach (var level in Model.AcademicLevels)
                 {
-                    <div class="level-pill">
-                        <span class="level-number">@level.LevelNumber</span>
-                        <span class="level-name">@level.DisplayName</span>
-                    </div>
+                    <button type="button" class="btn-filter" id="filter-btn-@level.LevelNumber" onclick="toggleBrowseLevel(@level.LevelNumber)">
+                        Level @level.LevelNumber Courses
+                    </button>
                 }
-            }
-            else
-            {
-                <p class="text-muted">No academic levels currently loaded.</p>
-            }
+            </div>
         </div>
-    </div>
+
+        <div id="courseLoadingSpinner" class="loading-state" style="display: none;">
+            <div class="spinner"></div>
+            <span>Fetching catalog offerings...</span>
+        </div>
+
+        <div class="courses-grid" id="coursesGrid">
+            <!-- Dynamic course offering cards rendered by JS -->
+        </div>
+    </section>
+
+    <!-- Step 3: Generation Action & Status -->
+    <section class="action-section">
+        <button type="button" id="generateBtn" class="btn-primary-lg" onclick="generateSchedule()">
+            <span class="btn-text">Generate Conflict-Free Schedules</span>
+            <span class="spinner-sm" style="display: none;" id="btnSpinner"></span>
+        </button>
+
+        <div id="statusAlert" class="status-alert" style="display: none;"></div>
+    </section>
+
+    <!-- Step 4: Schedule Results & Weekly Grid -->
+    <section class="results-section" id="resultsSection" style="display: none;">
+        <div class="results-header">
+            <div>
+                <h2>Computed Timetables</h2>
+                <p id="resultsStats" class="results-stats">Showing valid combinations</p>
+            </div>
+            <div class="pagination-toolbar">
+                <button type="button" class="btn-nav" id="prevScheduleBtn" onclick="prevSchedule()">
+                    &larr; Previous
+                </button>
+                <span class="page-indicator" id="schedulePageIndicator">Schedule 1 of 1</span>
+                <button type="button" class="btn-nav" id="nextScheduleBtn" onclick="nextSchedule()">
+                    Next &rarr;
+                </button>
+                <button type="button" class="btn-outline" onclick="window.print()">
+                    Print / Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Dynamic Timetable Grid Container -->
+        <div class="timetable-wrapper">
+            <div class="timetable-grid" id="timetableGrid">
+                <!-- Dynamically populated columns & cells -->
+            </div>
+        </div>
+
+        <!-- Schedule Group Details Breakdown -->
+        <div class="schedule-details-card">
+            <h3>Enrolled Course Sections for This Schedule</h3>
+            <div class="selected-groups-list" id="selectedGroupsList">
+                <!-- Badges for each group in active schedule -->
+            </div>
+        </div>
+    </section>
 </div>
 
 <style>
-    .hero-section {
-        max-width: 800px;
-        margin: 2rem auto;
-        text-align: center;
+    .app-container {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
     }
 
-    h1 {
-        font-size: 2.25rem;
-        font-weight: 800;
-        letter-spacing: -0.025em;
+    /* Hero Section */
+    .hero-header {
+        text-align: center;
+        max-width: 800px;
+        margin: 1rem auto 0;
+    }
+
+    .hero-badge {
+        display: inline-block;
+        background: rgba(37, 99, 235, 0.15);
+        color: var(--accent);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        padding: 0.3rem 0.8rem;
+        border-radius: 9999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
         margin-bottom: 1rem;
-        background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+    }
+
+    .hero-header h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        line-height: 1.2;
+        margin-bottom: 0.75rem;
+        background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 
-    .subtitle {
+    .hero-subtitle {
         color: var(--text-muted);
-        font-size: 1.125rem;
-        margin-bottom: 2rem;
+        font-size: 1.1rem;
         line-height: 1.6;
     }
 
-    .card {
-        background-color: var(--surface);
+    /* Cards */
+    .config-card {
+        background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: 12px;
+        border-radius: 16px;
         padding: 1.75rem;
-        text-align: left;
-        margin-top: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
 
-    .card h2 {
-        font-size: 1.25rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        color: var(--text);
-    }
-
-    .levels-grid {
+    .section-title {
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
     }
 
-    .level-pill {
+    .section-title-between {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 0.5rem;
-        background: rgba(37, 99, 235, 0.1);
-        border: 1px solid rgba(37, 99, 235, 0.3);
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        color: var(--text);
-        font-weight: 500;
-        font-size: 0.95rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
     }
 
-    .level-number {
+    .section-title-between .section-title {
+        margin-bottom: 0;
+    }
+
+    .step-num {
         background: var(--primary);
         color: white;
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.8rem;
         font-weight: 700;
+        font-size: 1rem;
+        flex-shrink: 0;
     }
 
-    .alert {
-        padding: 1rem;
+    .section-title h2 {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 0.25rem;
+    }
+
+    .section-title p {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    /* Step 1 Grid */
+    .config-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 2rem;
+    }
+
+    @@media (max-width: 768px) {
+        .config-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .tooltip-icon {
+        color: var(--text-muted);
+        cursor: help;
+        font-size: 0.85rem;
+    }
+
+    .level-btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+
+    .level-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 0.65rem 1rem;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .level-btn:hover {
+        border-color: var(--accent);
+        background: rgba(56, 189, 248, 0.08);
+    }
+
+    .level-btn.active {
+        background: rgba(37, 99, 235, 0.2);
+        border-color: var(--primary);
+        color: var(--accent);
+        box-shadow: 0 0 12px rgba(37, 99, 235, 0.3);
+    }
+
+    .level-icon {
+        background: var(--surface-hover);
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+    }
+
+    .level-btn.active .level-icon {
+        background: var(--primary);
+        color: white;
+    }
+
+    .form-select {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 0.7rem 1rem;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .form-select:focus {
+        border-color: var(--accent);
+    }
+
+    .form-hint {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
+    /* Course Selection */
+    .selection-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .selected-pill {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .btn-ghost {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        padding: 0.4rem 0.8rem;
         border-radius: 8px;
-        margin-bottom: 1.5rem;
-        text-align: left;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s;
     }
 
-    .alert-warning {
-        background-color: rgba(245, 158, 11, 0.1);
-        border: 1px solid rgba(245, 158, 11, 0.3);
-        color: #fbbf24;
+    .btn-ghost:hover {
+        background: var(--surface-hover);
+        color: var(--text);
     }
 
-    .text-muted {
+    .btn-ghost.text-danger:hover {
+        color: #f87171;
+        border-color: rgba(248, 113, 113, 0.3);
+    }
+
+    .cross-level-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+    }
+
+    .cross-level-label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .cross-level-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-filter {
+        background: rgba(15, 23, 42, 0.5);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-filter:hover, .btn-filter.active {
+        background: var(--surface-hover);
+        color: var(--text);
+        border-color: var(--text-muted);
+    }
+
+    .courses-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1rem;
+    }
+
+    .course-card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+    }
+
+    .course-card:hover {
+        border-color: rgba(56, 189, 248, 0.4);
+        transform: translateY(-2px);
+    }
+
+    .course-card.selected {
+        background: rgba(37, 99, 235, 0.12);
+        border-color: var(--primary);
+        box-shadow: 0 0 14px rgba(37, 99, 235, 0.25);
+    }
+
+    .course-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+
+    .course-code {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .level-tag {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+        background: var(--surface-hover);
         color: var(--text-muted);
     }
+
+    .level-tag.cross-level {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .course-name {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        line-height: 1.4;
+    }
+
+    .course-card-bottom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid rgba(51, 65, 85, 0.6);
+        padding-top: 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .activity-badges {
+        display: flex;
+        gap: 0.35rem;
+    }
+
+    .badge-act {
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .badge-Lecture { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .badge-Lab { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .badge-Tutorial { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+
+    .checkbox-custom {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+    }
+
+    /* Action Section */
+    .action-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        margin: 0.5rem 0;
+    }
+
+    .btn-primary-lg {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        border: none;
+        padding: 1rem 2.5rem;
+        border-radius: 12px;
+        font-size: 1.15rem;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .btn-primary-lg:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(37, 99, 235, 0.5);
+    }
+
+    .btn-primary-lg:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .status-alert {
+        width: 100%;
+        max-width: 800px;
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        text-align: center;
+    }
+
+    .status-alert.error {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+    }
+
+    .status-alert.success {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #6ee7b7;
+    }
+
+    /* Results & Timetable Grid */
+    .results-section {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .results-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 1.25rem;
+    }
+
+    .results-stats {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    .pagination-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .btn-nav {
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+    }
+
+    .btn-nav:hover:not(:disabled) {
+        background: #475569;
+    }
+
+    .btn-nav:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .page-indicator {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: var(--accent);
+        padding: 0 0.5rem;
+    }
+
+    .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        cursor: pointer;
+    }
+
+    .btn-outline:hover {
+        background: var(--surface-hover);
+        color: var(--text);
+    }
+
+    /* Dynamic CSS Grid Timetable */
+    .timetable-wrapper {
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+    }
+
+    .timetable-grid {
+        display: grid;
+        gap: 8px;
+        min-width: 750px;
+    }
+
+    .grid-cell-header {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.75rem;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-align: center;
+        color: var(--accent);
+    }
+
+    .time-slot-label {
+        background: rgba(15, 23, 42, 0.5);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.75rem 0.5rem;
+        font-weight: 600;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .grid-cell-empty {
+        background: rgba(15, 23, 42, 0.2);
+        border: 1px dashed rgba(51, 65, 85, 0.4);
+        border-radius: 8px;
+        min-height: 90px;
+    }
+
+    .grid-cell-meeting {
+        border-radius: 8px;
+        padding: 0.8rem;
+        min-height: 90px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 0.4rem;
+        border: 1px solid transparent;
+        transition: transform 0.15s ease;
+    }
+
+    .grid-cell-meeting:hover {
+        transform: scale(1.02);
+    }
+
+    .grid-cell-meeting.type-Lecture {
+        background: rgba(37, 99, 235, 0.18);
+        border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    .grid-cell-meeting.type-Lab {
+        background: rgba(147, 51, 234, 0.18);
+        border-color: rgba(168, 85, 247, 0.4);
+    }
+
+    .grid-cell-meeting.type-Tutorial {
+        background: rgba(16, 185, 129, 0.18);
+        border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .cell-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .cell-course-code {
+        font-weight: 800;
+        font-size: 0.95rem;
+        color: white;
+    }
+
+    .cell-act-type {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    .cell-group-name {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+
+    .cell-room {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    /* Selected Groups List */
+    .schedule-details-card {
+        border-top: 1px solid var(--border);
+        padding-top: 1.25rem;
+    }
+
+    .schedule-details-card h3 {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        color: var(--text);
+    }
+
+    .selected-groups-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+
+    .group-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
+        padding: 0.4rem 0.8rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+    }
+
+    .group-pill-code {
+        font-weight: 700;
+        color: var(--accent);
+    }
+
+    /* Spinners & Utilities */
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        border-top-color: var(--accent);
+        animation: spin 1s linear infinite;
+    }
+
+    .spinner-sm {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s linear infinite;
+    }
+
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 2.5rem;
+        color: var(--text-muted);
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
 </style>
+
+@section Scripts {
+<script>
+    // State management
+    let state = {
+        selectedLevel: 1,
+        assignedPrimaryGroupId: null,
+        selectedOfferings: new Set(),
+        currentLevelOfferings: [],
+        allLoadedOfferings: new Map(), // id -> offering
+        generatedSchedules: [],
+        currentScheduleIndex: 0
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // Load initial offerings for Level 1
+        selectLevel(1);
+    });
+
+    // Step 1: Select Academic Level
+    async function selectLevel(levelNumber) {
+        state.selectedLevel = levelNumber;
+
+        // Update active button state
+        document.querySelectorAll(".level-btn").forEach(btn => {
+            btn.classList.toggle("active", parseInt(btn.dataset.level) === levelNumber);
+        });
+
+        // Fetch offerings for this level
+        await loadOfferingsForLevel(levelNumber);
+        updateSelectedCounter();
+    }
+
+    // Load offerings via AJAX Razor Page handler
+    async function loadOfferingsForLevel(levelNumber) {
+        const spinner = document.getElementById("courseLoadingSpinner");
+        const grid = document.getElementById("coursesGrid");
+
+        spinner.style.display = "flex";
+        grid.style.display = "none";
+
+        try {
+            const response = await fetch(`/Index?handler=Offerings&levelNumber=${levelNumber}`);
+            if (!response.ok) throw new Error("Failed to load offerings");
+
+            const offerings = await response.json();
+            state.currentLevelOfferings = offerings;
+
+            // Cache into allLoadedOfferings
+            offerings.forEach(o => state.allLoadedOfferings.set(o.id, o));
+
+            // Populate Cohort dropdown from Lecture groups of this level
+            populateCohortDropdown(offerings);
+
+            // Render course cards
+            renderCourseCards(offerings);
+        } catch (err) {
+            console.error(err);
+            grid.innerHTML = `<div class="status-alert error">Error loading courses: ${err.message}</div>`;
+        } finally {
+            spinner.style.display = "none";
+            grid.style.display = "grid";
+        }
+    }
+
+    // Populate Cohort selection dropdown
+    function populateCohortDropdown(offerings) {
+        const select = document.getElementById("cohortSelect");
+        const previousValue = select.value;
+        select.innerHTML = '<option value="">No Cohort Lock (Evaluate All Sections)</option>';
+
+        // Extract lecture groups from courses in this level
+        const lectureGroups = new Map(); // id -> name
+        offerings.forEach(offering => {
+            (offering.groups || []).forEach(grp => {
+                if (grp.activityType.toLowerCase() === "lecture") {
+                    lectureGroups.set(grp.id, `${grp.name} (${offering.courseCode})`);
+                }
+            });
+        });
+
+        lectureGroups.forEach((label, id) => {
+            const opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = label;
+            select.appendChild(opt);
+        });
+
+        // Restore if still present
+        if (lectureGroups.has(previousValue)) {
+            select.value = previousValue;
+            state.assignedPrimaryGroupId = previousValue;
+        } else {
+            state.assignedPrimaryGroupId = null;
+        }
+    }
+
+    function onCohortChange() {
+        const val = document.getElementById("cohortSelect").value;
+        state.assignedPrimaryGroupId = val ? val : null;
+    }
+
+    // Render course offering cards
+    function renderCourseCards(offerings) {
+        const grid = document.getElementById("coursesGrid");
+        grid.innerHTML = "";
+
+        if (!offerings || offerings.length === 0) {
+            grid.innerHTML = `<p class="text-muted" style="grid-column: 1 / -1; padding: 1.5rem; text-align: center;">No course offerings available for Level ${state.selectedLevel}.</p>`;
+            return;
+        }
+
+        offerings.forEach(offering => {
+            const isSelected = state.selectedOfferings.has(offering.id);
+            const isCrossLevel = offering.academicLevelNumber !== state.selectedLevel;
+
+            const card = document.createElement("div");
+            card.className = `course-card ${isSelected ? "selected" : ""}`;
+            card.id = `course-card-${offering.id}`;
+            card.onclick = () => toggleCourseSelection(offering.id);
+
+            const badgesHtml = (offering.activityTypes || []).map(act => 
+                `<span class="badge-act badge-${act}">${act}</span>`
+            ).join("");
+
+            card.innerHTML = `
+                <div class="course-card-top">
+                    <div>
+                        <div class="course-code">${escapeHtml(offering.courseCode)}</div>
+                        <div class="course-name">${escapeHtml(offering.courseName)}</div>
+                    </div>
+                    <span class="level-tag ${isCrossLevel ? "cross-level" : ""}">
+                        ${isCrossLevel ? `Cross-Lvl (L${offering.academicLevelNumber})` : `Level ${offering.academicLevelNumber}`}
+                    </span>
+                </div>
+                <div class="course-card-bottom">
+                    <div class="activity-badges">${badgesHtml}</div>
+                    <input type="checkbox" class="checkbox-custom" ${isSelected ? "checked" : ""} onclick="event.stopPropagation(); toggleCourseSelection('${offering.id}')" />
+                </div>
+            `;
+
+            grid.appendChild(card);
+        });
+    }
+
+    function toggleCourseSelection(offeringId) {
+        if (state.selectedOfferings.has(offeringId)) {
+            state.selectedOfferings.delete(offeringId);
+        } else {
+            state.selectedOfferings.add(offeringId);
+        }
+
+        const card = document.getElementById(`course-card-${offeringId}`);
+        if (card) {
+            const isSelected = state.selectedOfferings.has(offeringId);
+            card.classList.toggle("selected", isSelected);
+            const cb = card.querySelector(".checkbox-custom");
+            if (cb) cb.checked = isSelected;
+        }
+
+        updateSelectedCounter();
+    }
+
+    function selectAllCurrentLevel() {
+        state.currentLevelOfferings.forEach(o => state.selectedOfferings.add(o.id));
+        renderCourseCards(state.currentLevelOfferings);
+        updateSelectedCounter();
+    }
+
+    function clearCourseSelections() {
+        state.selectedOfferings.clear();
+        renderCourseCards(state.currentLevelOfferings);
+        updateSelectedCounter();
+    }
+
+    function updateSelectedCounter() {
+        const badge = document.getElementById("selectedCountBadge");
+        const count = state.selectedOfferings.size;
+        badge.textContent = `${count} Course${count === 1 ? "" : "s"} Selected`;
+
+        const generateBtn = document.getElementById("generateBtn");
+        generateBtn.disabled = count === 0;
+    }
+
+    // Toggle browsing offerings from other levels
+    async function toggleBrowseLevel(levelNumber) {
+        document.querySelectorAll(".btn-filter").forEach(b => {
+            b.classList.toggle("active", b.id === `filter-btn-${levelNumber}`);
+        });
+
+        await loadOfferingsForLevel(levelNumber);
+    }
+
+    // Step 3 & 4: Generate Schedule via AJAX POST
+    async function generateSchedule() {
+        if (state.selectedOfferings.size === 0) return;
+
+        const btn = document.getElementById("generateBtn");
+        const btnText = btn.querySelector(".btn-text");
+        const btnSpinner = document.getElementById("btnSpinner");
+        const statusAlert = document.getElementById("statusAlert");
+        const resultsSection = document.getElementById("resultsSection");
+
+        btn.disabled = true;
+        btnText.textContent = "Solving Conflict-Free Timetables...";
+        btnSpinner.style.display = "inline-block";
+        statusAlert.style.display = "none";
+
+        const requestPayload = {
+            academicLevelNumber: state.selectedLevel,
+            assignedPrimaryGroupId: state.assignedPrimaryGroupId || null,
+            selectedCourseOfferingIds: Array.from(state.selectedOfferings)
+        };
+
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || "";
+
+        try {
+            const response = await fetch("/Index?handler=Generate", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "RequestVerificationToken": token
+                },
+                body: JSON.stringify(requestPayload)
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || "Schedule computation failed.");
+            }
+
+            const data = await response.json();
+
+            if (!data.isSuccess || !data.schedules || data.schedules.length === 0) {
+                statusAlert.className = "status-alert error";
+                statusAlert.textContent = data.errorMessage || 
+                    `No valid schedules found from ${data.totalCombinationsEvaluated || 0} evaluated combinations. Unavoidable time conflict exists between selected courses.`;
+                statusAlert.style.display = "block";
+                resultsSection.style.display = "none";
+                return;
+            }
+
+            // Success
+            state.generatedSchedules = data.schedules;
+            state.currentScheduleIndex = 0;
+
+            statusAlert.className = "status-alert success";
+            statusAlert.textContent = `Found ${data.schedules.length} conflict-free schedule(s) from ${data.totalCombinationsEvaluated} evaluated combinations.`;
+            statusAlert.style.display = "block";
+
+            renderActiveSchedule();
+            resultsSection.style.display = "flex";
+            resultsSection.scrollIntoView({ behavior: "smooth" });
+
+        } catch (err) {
+            console.error(err);
+            statusAlert.className = "status-alert error";
+            statusAlert.textContent = `Error: ${err.message}`;
+            statusAlert.style.display = "block";
+            resultsSection.style.display = "none";
+        } finally {
+            btn.disabled = false;
+            btnText.textContent = "Generate Conflict-Free Schedules";
+            btnSpinner.style.display = "none";
+        }
+    }
+
+    // Step 4: Render active schedule into dynamic CSS grid
+    function renderActiveSchedule() {
+        const schedules = state.generatedSchedules;
+        if (!schedules || schedules.length === 0) return;
+
+        const schedule = schedules[state.currentScheduleIndex];
+        const grid = document.getElementById("timetableGrid");
+        const pageIndicator = document.getElementById("schedulePageIndicator");
+        const prevBtn = document.getElementById("prevScheduleBtn");
+        const nextBtn = document.getElementById("nextScheduleBtn");
+        const statsLabel = document.getElementById("resultsStats");
+
+        // Update toolbar
+        pageIndicator.textContent = `Schedule ${state.currentScheduleIndex + 1} of ${schedules.length}`;
+        prevBtn.disabled = state.currentScheduleIndex === 0;
+        nextBtn.disabled = state.currentScheduleIndex === schedules.length - 1;
+        statsLabel.textContent = `Schedule ID: ${schedule.scheduleId.substring(0, 8)}... • ${schedule.selectedGroups.length} Scheduled Sections`;
+
+        // Flatten all meetings in this schedule
+        const meetingsList = [];
+        (schedule.selectedGroups || []).forEach(group => {
+            (group.meetings || []).forEach(meeting => {
+                meetingsList.push({
+                    courseCode: group.courseCode,
+                    groupName: group.groupName,
+                    activityType: group.activityType,
+                    meeting: meeting
+                });
+            });
+        });
+
+        // DYNAMIC DAY OF WEEK EXTRACTION (Never hardcoded)
+        // Standard logical week sequence starting Saturday
+        const daySequence = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        
+        // Extract unique days present in the active schedule's meetings
+        const rawDays = [...new Set(meetingsList.map(item => normalizeDayOfWeek(item.meeting.dayOfWeek)))];
+        rawDays.sort((a, b) => daySequence.indexOf(a) - daySequence.indexOf(b));
+
+        // DYNAMIC TIME SLOT EXTRACTION
+        // Extract unique time intervals present in meetings
+        const rawTimeSlots = [...new Set(meetingsList.map(item => `${item.meeting.startTime} - ${item.meeting.endTime}`))];
+        rawTimeSlots.sort((a, b) => a.localeCompare(b));
+
+        // If no meetings, fallback message
+        if (rawDays.length === 0 || rawTimeSlots.length === 0) {
+            grid.innerHTML = `<p class="text-muted" style="padding: 2rem; text-align: center;">No scheduled meetings to display.</p>`;
+            return;
+        }
+
+        // Configure CSS Grid dynamically: 1 time column + 1 column per active day
+        grid.style.gridTemplateColumns = `120px repeat(${rawDays.length}, minmax(180px, 1fr))`;
+        grid.innerHTML = "";
+
+        // 1. Render Top Header Row
+        // Top-left corner cell
+        const cornerCell = document.createElement("div");
+        cornerCell.className = "grid-cell-header";
+        cornerCell.textContent = "Time / Day";
+        grid.appendChild(cornerCell);
+
+        // Day header columns
+        rawDays.forEach(day => {
+            const dayHeader = document.createElement("div");
+            dayHeader.className = "grid-cell-header";
+            dayHeader.textContent = day;
+            grid.appendChild(dayHeader);
+        });
+
+        // 2. Render Rows for each Time Slot
+        rawTimeSlots.forEach(slot => {
+            // Row header: Time slot
+            const timeLabel = document.createElement("div");
+            timeLabel.className = "time-slot-label";
+            timeLabel.textContent = slot;
+            grid.appendChild(timeLabel);
+
+            // Cells for each day in this time slot
+            rawDays.forEach(day => {
+                const matchingItems = meetingsList.filter(item => 
+                    normalizeDayOfWeek(item.meeting.dayOfWeek) === day &&
+                    `${item.meeting.startTime} - ${item.meeting.endTime}` === slot
+                );
+
+                if (matchingItems.length > 0) {
+                    const cell = document.createElement("div");
+                    cell.className = "grid-cell-container";
+
+                    matchingItems.forEach(item => {
+                        const card = document.createElement("div");
+                        card.className = `grid-cell-meeting type-${item.activityType}`;
+                        card.innerHTML = `
+                            <div class="cell-top">
+                                <span class="cell-course-code">${escapeHtml(item.courseCode)}</span>
+                                <span class="cell-act-type">${escapeHtml(item.activityType)}</span>
+                            </div>
+                            <div class="cell-group-name">${escapeHtml(item.groupName)}</div>
+                            <div class="cell-room">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                </svg>
+                                <span>${escapeHtml(item.meeting.room || "Room TBA")}</span>
+                            </div>
+                        `;
+                        cell.appendChild(card);
+                    });
+                    grid.appendChild(cell);
+                } else {
+                    const emptyCell = document.createElement("div");
+                    emptyCell.className = "grid-cell-empty";
+                    grid.appendChild(emptyCell);
+                }
+            });
+        });
+
+        // 3. Render Enrolled Sections Breakdown list
+        renderSelectedGroupsList(schedule.selectedGroups);
+    }
+
+    function renderSelectedGroupsList(groups) {
+        const list = document.getElementById("selectedGroupsList");
+        list.innerHTML = "";
+
+        (groups || []).forEach(group => {
+            const pill = document.createElement("div");
+            pill.className = "group-pill";
+            pill.innerHTML = `
+                <span class="group-pill-code">${escapeHtml(group.courseCode)}</span>
+                <span>${escapeHtml(group.groupName)} (${escapeHtml(group.activityType)})</span>
+            `;
+            list.appendChild(pill);
+        });
+    }
+
+    function prevSchedule() {
+        if (state.currentScheduleIndex > 0) {
+            state.currentScheduleIndex--;
+            renderActiveSchedule();
+        }
+    }
+
+    function nextSchedule() {
+        if (state.currentScheduleIndex < state.generatedSchedules.length - 1) {
+            state.currentScheduleIndex++;
+            renderActiveSchedule();
+        }
+    }
+
+    // Helper: Normalize day of week (handles string or int from enum)
+    function normalizeDayOfWeek(day) {
+        if (typeof day === "string") return day;
+        const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        return days[day] || `Day ${day}`;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+</script>
+}
