@@ -105,7 +105,8 @@ public class ScheduleControllerTests
         var request = new GenerateScheduleRequest
         {
             AcademicLevelNumber = 1,
-            AssignedPrimaryGroupId = null,
+            PrimaryLectureGroupName = null,
+            PrimaryLabSectionName = null,
             SelectedCourseOfferingIds = [offeringCs.Id, offeringMath.Id]
         };
 
@@ -251,7 +252,7 @@ public class ScheduleControllerTests
         var request = new GenerateScheduleRequest
         {
             AcademicLevelNumber = 1,
-            AssignedPrimaryGroupId = group1.Id, // Locked to group1
+            PrimaryLectureGroupName = group1.Name, // Locked to group1
             SelectedCourseOfferingIds = [offering.Id]
         };
 
@@ -302,12 +303,11 @@ public class ScheduleControllerTests
         var solver = new ScheduleSolver();
         var controller = new SchedulesController(context, solver);
 
-        // Student has Level 1 primary group ID (which does not match groupL2A or groupL2B)
-        var dummyLevel1GroupId = Guid.NewGuid();
+        // Student has Level 1 primary group name (which does not match groupL2A or groupL2B)
         var request = new GenerateScheduleRequest
         {
             AcademicLevelNumber = 1,
-            AssignedPrimaryGroupId = dummyLevel1GroupId,
+            PrimaryLectureGroupName = "NonExistentLevel1Group",
             SelectedCourseOfferingIds = [offeringL2.Id]
         };
 
@@ -330,7 +330,8 @@ public class ScheduleControllerTests
         {
             StudentId = Guid.NewGuid(),
             AcademicLevelNumber = 2,
-            AssignedPrimaryGroupId = Guid.NewGuid(),
+            PrimaryLectureGroupName = "Lecture Group 1",
+            PrimaryLabSectionName = "Lab Section 18",
             SelectedCourseOfferingIds = [Guid.NewGuid(), Guid.NewGuid()]
         };
 
@@ -344,7 +345,8 @@ public class ScheduleControllerTests
         Assert.NotNull(deserialized);
         Assert.Equal(request.StudentId, deserialized.StudentId);
         Assert.Equal(request.AcademicLevelNumber, deserialized.AcademicLevelNumber);
-        Assert.Equal(request.AssignedPrimaryGroupId, deserialized.AssignedPrimaryGroupId);
+        Assert.Equal(request.PrimaryLectureGroupName, deserialized.PrimaryLectureGroupName);
+        Assert.Equal(request.PrimaryLabSectionName, deserialized.PrimaryLabSectionName);
         Assert.Equal(request.SelectedCourseOfferingIds.Count, deserialized.SelectedCourseOfferingIds.Count);
 
         // Also test response serialization

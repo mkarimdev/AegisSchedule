@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Web.Models;
 
 namespace Web.Services;
@@ -11,7 +12,7 @@ public class SchedulingApiClient : ISchedulingApiClient
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        Converters = { new JsonStringEnumConverter() }
     };
 
     public SchedulingApiClient(HttpClient httpClient, ILogger<SchedulingApiClient> logger)

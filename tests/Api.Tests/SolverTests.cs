@@ -217,7 +217,7 @@ public class SolverTests
         var snapshot = new SchedulingInputSnapshot(
             studentConstraint: new StudentGroupConstraint(
                 academicLevelNumber: 2,
-                assignedPrimaryGroupId: primaryGroupG1Id
+                primaryLectureGroupName: "CS201-G1"
             ),
             selectedCourses: [course],
             availableOptions: [optionG1, optionG2]
@@ -287,7 +287,8 @@ public class SolverTests
         var snapshot = new SchedulingInputSnapshot(
             studentConstraint: new StudentGroupConstraint(
                 academicLevelNumber: 3,
-                assignedPrimaryGroupId: Guid.NewGuid() // primary group for Level 3 does not lock Level 2
+                primaryLectureGroupName: "Group 1", // primary group for Level 3 does not lock Level 2
+                primaryLabSectionName: "Section 1"
             ),
             selectedCourses: [crossLevelCourse],
             availableOptions: [optionG1, optionG2]
@@ -303,5 +304,127 @@ public class SolverTests
         Assert.Equal(2, result.ValidSchedules.Count);
         Assert.Contains(result.ValidSchedules, s => s.SelectedGroups.Any(g => g.Id == optionG1.Id));
         Assert.Contains(result.ValidSchedules, s => s.SelectedGroups.Any(g => g.Id == optionG2.Id));
+    }
+
+    [Fact]
+    public void GenerateSchedules_WithDualCohortLock_LocksBothLectureAndLabForSameLevel()
+    {
+        // Arrange: Level 1 course CS101 with 2 Lectures and 2 Labs
+        var courseOfferingId = Guid.NewGuid();
+        var course = new SelectedCourseRequirement(
+            courseOfferingId: courseOfferingId,
+            courseCode: "CS101",
+            activityRequirements:
+            [
+                new ActivityRequirement(ActivityType.Lecture),
+                new ActivityRequirement(ActivityType.Lab)
+            ],
+            academicLevelNumber: 1
+        );
+
+        var lec1 = new ActivityGroupOption(Guid.NewGuid(), "Lecture Group 1", [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }], ActivityType.Lecture, courseOfferingId, "CS101", 1);
+        var lec2 = new ActivityGroupOption(Guid.NewGuid(), "Lecture Group 2", [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(11, 0), EndTime = new TimeOnly(13, 0) }], ActivityType.Lecture, courseOfferingId, "CS101", 1);
+        var lab1 = new ActivityGroupOption(Guid.NewGuid(), "Lab Section 1", [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }], ActivityType.Lab, courseOfferingId, "CS101", 1);
+        var lab2 = new ActivityGroupOption(Guid.NewGuid(), "Lab Section 2", [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(11, 0), EndTime = new TimeOnly(13, 0) }], ActivityType.Lab, courseOfferingId, "CS101", 1);
+
+        var snapshot = new SchedulingInputSnapshot(
+            studentConstraint: new StudentGroupConstraint(
+                academicLevelNumber: 1,
+                primaryLectureGroupName: "Lecture Group 1",
+                primaryLabSectionName: "Lab Section 2"
+            ),
+            selectedCourses: [course],
+            availableOptions: [lec1, lec2, lab1, lab2]
+        );
+
+        var solver = new ScheduleSolver();
+
+        // Act
+        var result = solver.GenerateSchedules(snapshot);
+
+        // Assert: Exactly 1 schedule with lec1 and lab2
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.ValidSchedules);
+        var selected = result.ValidSchedules[0].SelectedGroups;
+        Assert.Contains(selected, g => g.Id == lec1.Id);
+        Assert.Contains(selected, g => g.Id == lab2.Id);
+        Assert.DoesNotContain(selected, g => g.Id == lec2.Id);
+        Assert.DoesNotContain(selected, g => g.Id == lab1.Id);
+    }
+
+    [Fact]
+    public void GenerateSchedules_WithMultipleSameLevelCourses_LocksAllLecturesByName()
+    {
+        // Arrange: CS101 and MATH101 both at Level 1, each with Lecture Group 1 and 2 (distinct Guids)
+        var cs101Id = Guid.NewGuid();
+        var math101Id = Guid.NewGuid();
+
+        var csCourse = new SelectedCourseRequirement(cs101Id, "CS101", [new ActivityRequirement(ActivityType.Lecture)], 1);
+        var mathCourse = new SelectedCourseRequirement(math101Id, "MATH101", [new ActivityRequirement(ActivityType.Lecture)], 1);
+
+        var csLec1 = new ActivityGroupOption(Guid.NewGuid(), "Lecture Group 1", [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }], ActivityType.Lecture, cs101Id, "CS101", 1);
+        var csLec2 = new ActivityGroupOption(Guid.NewGuid(), "Lecture Group 2", [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(11, 0), EndTime = new TimeOnly(13, 0) }], ActivityType.Lecture, cs101Id, "CS101", 1);
+
+        var mathLec1 = new ActivityGroupOption(Guid.NewGuid(), "Lecture Group 1", [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }], ActivityType.Lecture, math101Id, "MATH101", 1);
+        var mathLec2 = new ActivityGroupOption(Guid.NewGuid(), "Lecture Group 2", [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(11, 0), EndTime = new TimeOnly(13, 0) }], ActivityType.Lecture, math101Id, "MATH101", 1);
+
+        var snapshot = new SchedulingInputSnapshot(
+            studentConstraint: new StudentGroupConstraint(
+                academicLevelNumber: 1,
+                primaryLectureGroupName: "Lecture Group 1"
+            ),
+            selectedCourses: [csCourse, mathCourse],
+            availableOptions: [csLec1, csLec2, mathLec1, mathLec2]
+        );
+
+        var solver = new ScheduleSolver();
+
+        // Act
+        var result = solver.GenerateSchedules(snapshot);
+
+        // Assert: Single schedule where both courses selected their respective Lecture Group 1
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.ValidSchedules);
+        var schedule = result.ValidSchedules[0];
+        Assert.Contains(schedule.SelectedGroups, g => g.Id == csLec1.Id);
+        Assert.Contains(schedule.SelectedGroups, g => g.Id == mathLec1.Id);
+    }
+
+    [Fact]
+    public void GenerateSchedules_WhenOnlyLectureLocked_KeepsLabsFlexible()
+    {
+        // Arrange: CS101 with Lecture Group 1 and 2 labs
+        var cs101Id = Guid.NewGuid();
+        var csCourse = new SelectedCourseRequirement(cs101Id, "CS101",
+        [
+            new ActivityRequirement(ActivityType.Lecture),
+            new ActivityRequirement(ActivityType.Lab)
+        ], 1);
+
+        var lec1 = new ActivityGroupOption(Guid.NewGuid(), "Lecture Group 1", [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }], ActivityType.Lecture, cs101Id, "CS101", 1);
+        var lab1 = new ActivityGroupOption(Guid.NewGuid(), "Lab Section 1", [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }], ActivityType.Lab, cs101Id, "CS101", 1);
+        var lab2 = new ActivityGroupOption(Guid.NewGuid(), "Lab Section 2", [new Meeting { DayOfWeek = DayOfWeek.Tuesday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }], ActivityType.Lab, cs101Id, "CS101", 1);
+
+        var snapshot = new SchedulingInputSnapshot(
+            studentConstraint: new StudentGroupConstraint(
+                academicLevelNumber: 1,
+                primaryLectureGroupName: "Lecture Group 1",
+                primaryLabSectionName: null // flexible lab
+            ),
+            selectedCourses: [csCourse],
+            availableOptions: [lec1, lab1, lab2]
+        );
+
+        var solver = new ScheduleSolver();
+
+        // Act
+        var result = solver.GenerateSchedules(snapshot);
+
+        // Assert: 2 schedules generated, both having lec1, one with lab1 and one with lab2
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.ValidSchedules.Count);
+        Assert.All(result.ValidSchedules, s => Assert.Contains(s.SelectedGroups, g => g.Id == lec1.Id));
+        Assert.Contains(result.ValidSchedules, s => s.SelectedGroups.Any(g => g.Id == lab1.Id));
+        Assert.Contains(result.ValidSchedules, s => s.SelectedGroups.Any(g => g.Id == lab2.Id));
     }
 }

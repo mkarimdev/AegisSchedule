@@ -124,45 +124,75 @@ public class ScheduleSolver
 
         bool isSameLevel = effectiveLevel != 0 && effectiveLevel == studentConstraint.AcademicLevelNumber;
 
-        // Rule (a): For same-level courses, automatically filter out ActivityGroup options that do not match AssignedPrimaryGroupId
+        // Rule (a): For same-level courses, apply dual cohort locks (PrimaryLectureGroupName and PrimaryLabSectionName)
         if (isSameLevel)
         {
-            var primaryId = studentConstraint.AssignedPrimaryGroupId;
-            var assignedIds = studentConstraint.AssignedGroupIds;
-
-            bool hasPrimaryConstraint = (primaryId.HasValue && primaryId.Value != Guid.Empty) || assignedIds.Count > 0;
-
-            if (hasPrimaryConstraint)
+            if (actType == ActivityType.Lecture && !string.IsNullOrWhiteSpace(studentConstraint.PrimaryLectureGroupName))
             {
-                var filtered = candidates.Where(c =>
-                    (primaryId.HasValue && (c.Id == primaryId.Value || c.ActivityGroupId == primaryId.Value)) ||
-                    assignedIds.Contains(c.Id) ||
-                    assignedIds.Contains(c.ActivityGroupId)
-                ).ToList();
+                var targetLecture = studentConstraint.PrimaryLectureGroupName;
+                var matched = candidates.Where(c => MatchesGroupName(c.Name, targetLecture)).ToList();
 
-                if (filtered.Count > 0)
+                // If matching lecture groups exist for this course offering, lock to them.
+                // Fallback: If course offering does not define that group (e.g. single general lecture), keep candidates.
+                if (matched.Count > 0)
                 {
-                    candidates = filtered;
+                    candidates = matched;
                 }
-                else
-                {
-                    // Check if the assigned group is present in another activity of this course
-                    bool primaryBelongsToThisCourse = allOptions
-                        .Where(o => MatchesCourse(o, course))
-                        .Any(o => (primaryId.HasValue && (o.Id == primaryId.Value || o.ActivityGroupId == primaryId.Value)) ||
-                                  assignedIds.Contains(o.Id) || assignedIds.Contains(o.ActivityGroupId));
+            }
+            else if ((actType == ActivityType.Lab || actType == ActivityType.Tutorial) && !string.IsNullOrWhiteSpace(studentConstraint.PrimaryLabSectionName))
+            {
+                var targetLab = studentConstraint.PrimaryLabSectionName;
+                var matched = candidates.Where(c => MatchesGroupName(c.Name, targetLab)).ToList();
 
-                    if (!primaryBelongsToThisCourse)
-                    {
-                        // Assigned group was for this level/course but not found among options -> filter out
-                        candidates = [];
-                    }
+                if (matched.Count > 0)
+                {
+                    candidates = matched;
                 }
             }
         }
-        // Rule (b): For cross-level courses, all candidates are preserved.
+        // Rule (b): For cross-level courses, all candidates are preserved without cohort filtering.
 
         return candidates;
+    }
+
+    private static bool MatchesGroupName(string candidateName, string targetName)
+    {
+        if (string.IsNullOrWhiteSpace(candidateName) || string.IsNullOrWhiteSpace(targetName))
+        {
+            return false;
+        }
+
+        var cand = candidateName.Trim();
+        var target = targetName.Trim();
+
+        if (string.Equals(cand, target, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        static string Normalize(string s) =>
+            s.Replace("Lecture", "", StringComparison.OrdinalIgnoreCase)
+             .Replace("Lab", "", StringComparison.OrdinalIgnoreCase)
+             .Replace("Tutorial", "", StringComparison.OrdinalIgnoreCase)
+             .Trim();
+
+        var normCand = Normalize(cand);
+        var normTarget = Normalize(target);
+
+        if (!string.IsNullOrEmpty(normCand) && !string.IsNullOrEmpty(normTarget) &&
+            string.Equals(normCand, normTarget, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (cand.EndsWith($"-{target}", StringComparison.OrdinalIgnoreCase) ||
+            cand.EndsWith($" {target}", StringComparison.OrdinalIgnoreCase) ||
+            cand.EndsWith($"_{target}", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static bool MatchesCourse(ActivityGroupOption option, SelectedCourseRequirement course)

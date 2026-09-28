@@ -3,25 +3,18 @@ namespace Api.Solver;
 public sealed record StudentGroupConstraint
 {
     public int AcademicLevelNumber { get; init; }
-    public Guid? AssignedPrimaryGroupId { get; init; }
-    public IReadOnlyList<Guid> AssignedGroupIds { get; init; } = [];
+    public string? PrimaryLectureGroupName { get; init; }
+    public string? PrimaryLabSectionName { get; init; }
 
     public StudentGroupConstraint() { }
 
-    public StudentGroupConstraint(int academicLevelNumber, Guid? assignedPrimaryGroupId = null)
+    public StudentGroupConstraint(
+        int academicLevelNumber,
+        string? primaryLectureGroupName = null,
+        string? primaryLabSectionName = null)
     {
         AcademicLevelNumber = academicLevelNumber;
-        AssignedPrimaryGroupId = assignedPrimaryGroupId;
-        if (assignedPrimaryGroupId.HasValue && assignedPrimaryGroupId.Value != Guid.Empty)
-        {
-            AssignedGroupIds = [assignedPrimaryGroupId.Value];
-        }
-    }
-
-    public StudentGroupConstraint(int academicLevelNumber, IEnumerable<Guid> assignedGroupIds)
-    {
-        AcademicLevelNumber = academicLevelNumber;
-        AssignedGroupIds = assignedGroupIds.ToList();
-        AssignedPrimaryGroupId = AssignedGroupIds.FirstOrDefault();
+        PrimaryLectureGroupName = string.IsNullOrWhiteSpace(primaryLectureGroupName) ? null : primaryLectureGroupName.Trim();
+        PrimaryLabSectionName = string.IsNullOrWhiteSpace(primaryLabSectionName) ? null : primaryLabSectionName.Trim();
     }
 }

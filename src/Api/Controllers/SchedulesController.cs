@@ -39,7 +39,7 @@ public class SchedulesController : ControllerBase
         if (offeringIds.Count == 0)
         {
             var emptyResult = _solver.GenerateSchedules(new SchedulingInputSnapshot(
-                new StudentGroupConstraint(request.AcademicLevelNumber, request.AssignedPrimaryGroupId),
+                new StudentGroupConstraint(request.AcademicLevelNumber, request.PrimaryLectureGroupName, request.PrimaryLabSectionName),
                 [],
                 []
             ));
@@ -136,10 +136,11 @@ public class SchedulesController : ControllerBase
             ));
         }
 
-        // d) Construct StudentGroupConstraint using AcademicLevelNumber and AssignedPrimaryGroupId
+        // d) Construct StudentGroupConstraint using AcademicLevelNumber, PrimaryLectureGroupName, and PrimaryLabSectionName
         var studentConstraint = new StudentGroupConstraint(
             request.AcademicLevelNumber,
-            request.AssignedPrimaryGroupId
+            request.PrimaryLectureGroupName,
+            request.PrimaryLabSectionName
         );
 
         // e) Build SchedulingInputSnapshot and execute solver

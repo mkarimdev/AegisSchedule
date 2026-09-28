@@ -23,13 +23,13 @@
         </div>
     </div>
 
-    <!-- Step 1: Academic Standing & Cohort -->
+    <!-- Step 1: Academic Standing & Cohorts -->
     <section class="card">
         <div class="card-header">
             <span class="step-badge">1</span>
             <div>
-                <h2>Academic Standing & Cohort</h2>
-                <p>Select your current year and optional primary lecture cohort.</p>
+                <h2>Academic Standing & Cohorts</h2>
+                <p>Select your current year and optional primary lecture group & lab section locks.</p>
             </div>
         </div>
 
@@ -47,16 +47,27 @@
                         </button>
                     }
                 </div>
+                <span class="form-help">Your declared academic standing.</span>
             </div>
 
             <div class="form-col">
-                <label class="form-label" for="cohortSelect">
-                    Primary Cohort Lock
+                <label class="form-label" for="lectureGroupSelect">
+                    Primary Lecture Group
                 </label>
-                <select id="cohortSelect" class="form-select" onchange="onCohortChange()">
-                    <option value="">Any Cohort (No Lock)</option>
+                <select id="lectureGroupSelect" class="form-select" onchange="onLectureGroupChange()">
+                    <option value="">Any Lecture Group (Flexible)</option>
                 </select>
-                <span class="form-help">Locks lecture sections for same-level courses. Cross-level courses remain flexible.</span>
+                <span class="form-help">Locks lecture times for same-level courses.</span>
+            </div>
+
+            <div class="form-col">
+                <label class="form-label" for="labSectionSelect">
+                    Primary Lab Section
+                </label>
+                <select id="labSectionSelect" class="form-select" onchange="onLabSectionChange()">
+                    <option value="">Any Lab Section (Flexible)</option>
+                </select>
+                <span class="form-help">Locks lab times for same-level courses.</span>
             </div>
         </div>
     </section>
@@ -255,11 +266,11 @@
     /* Step 1 Form */
     .form-row {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1.75rem;
+        grid-template-columns: 1.2fr 1fr 1fr;
+        gap: 1.5rem;
     }
 
-    @@media (max-width: 768px) {
+    @@media (max-width: 900px) {
         .form-row {
             grid-template-columns: 1fr;
             gap: 1.25rem;
@@ -1151,7 +1162,8 @@
     let state = {
         primaryStandingLevel: 1,
         browsingLevel: 1,
-        assignedPrimaryGroupId: null,
+        primaryLectureGroupName: null,
+        primaryLabSectionName: null,
         selectedOfferings: new Set(),
         currentLevelOfferings: [],
         allLoadedOfferings: new Map(),
@@ -1207,7 +1219,7 @@
             offerings.forEach(o => state.allLoadedOfferings.set(o.id, o));
 
             if (isPrimaryStanding) {
-                populateCohortDropdown(offerings);
+                populateCohortDropdowns(offerings);
             }
 
             if (levelNumber === state.browsingLevel) {
@@ -1227,39 +1239,77 @@
         }
     }
 
-    function populateCohortDropdown(offerings) {
-        const select = document.getElementById("cohortSelect");
-        const previousValue = state.assignedPrimaryGroupId || select.value;
-        select.innerHTML = '<option value="">Any Cohort (No Lock)</option>';
+    function populateCohortDropdowns(offerings) {
+        const lectureSelect = document.getElementById("lectureGroupSelect");
+        const labSelect = document.getElementById("labSectionSelect");
+        if (!lectureSelect || !labSelect) return;
 
-        const lectureGroups = new Map();
-        offerings.forEach(offering => {
+        const prevLecture = state.primaryLectureGroupName || lectureSelect.value;
+        const prevLab = state.primaryLabSectionName || labSelect.value;
+
+        lectureSelect.innerHTML = '<option value="">Any Lecture Group (Flexible)</option>';
+        labSelect.innerHTML = '<option value="">Any Lab Section (Flexible)</option>';
+
+        const lectureNames = new Set();
+        const labNames = new Set();
+
+        (offerings || []).forEach(offering => {
             (offering.groups || []).forEach(grp => {
-                if (grp.activityType && grp.activityType.toLowerCase() === "lecture") {
-                    lectureGroups.set(grp.id, `${grp.name} (${offering.courseCode})`);
+                const type = (grp.activityType || "").toLowerCase();
+                const name = (grp.name || "").trim();
+                if (!name) return;
+
+                if (type === "lecture") {
+                    lectureNames.add(name);
+                } else if (type === "lab" || type === "tutorial") {
+                    labNames.add(name);
                 }
             });
         });
 
-        lectureGroups.forEach((label, id) => {
+        const sortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        const sortedLectures = Array.from(lectureNames).sort(sortCollator.compare);
+        const sortedLabs = Array.from(labNames).sort(sortCollator.compare);
+
+        sortedLectures.forEach(name => {
             const opt = document.createElement("option");
-            opt.value = id;
-            opt.textContent = label;
-            select.appendChild(opt);
+            opt.value = name;
+            opt.textContent = name;
+            lectureSelect.appendChild(opt);
         });
 
-        if (previousValue && lectureGroups.has(previousValue)) {
-            select.value = previousValue;
-            state.assignedPrimaryGroupId = previousValue;
+        sortedLabs.forEach(name => {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            labSelect.appendChild(opt);
+        });
+
+        if (prevLecture && lectureNames.has(prevLecture)) {
+            lectureSelect.value = prevLecture;
+            state.primaryLectureGroupName = prevLecture;
         } else {
-            select.value = "";
-            state.assignedPrimaryGroupId = null;
+            lectureSelect.value = "";
+            state.primaryLectureGroupName = null;
+        }
+
+        if (prevLab && labNames.has(prevLab)) {
+            labSelect.value = prevLab;
+            state.primaryLabSectionName = prevLab;
+        } else {
+            labSelect.value = "";
+            state.primaryLabSectionName = null;
         }
     }
 
-    function onCohortChange() {
-        const val = document.getElementById("cohortSelect").value;
-        state.assignedPrimaryGroupId = val ? val : null;
+    function onLectureGroupChange() {
+        const val = document.getElementById("lectureGroupSelect").value;
+        state.primaryLectureGroupName = val ? val : null;
+    }
+
+    function onLabSectionChange() {
+        const val = document.getElementById("labSectionSelect").value;
+        state.primaryLabSectionName = val ? val : null;
     }
 
     function renderCourseCards(offerings) {
@@ -1454,7 +1504,8 @@
 
         const requestPayload = {
             academicLevelNumber: state.primaryStandingLevel,
-            assignedPrimaryGroupId: state.assignedPrimaryGroupId || null,
+            primaryLectureGroupName: state.primaryLectureGroupName || null,
+            primaryLabSectionName: state.primaryLabSectionName || null,
             selectedCourseOfferingIds: Array.from(state.selectedOfferings)
         };
 
@@ -1481,8 +1532,8 @@
                 statusAlert.className = "status-alert warning";
                 const evalCount = data.totalCombinationsEvaluated || 0;
                 let tipHtml = "";
-                if (state.assignedPrimaryGroupId) {
-                    tipHtml = `<div class="status-alert-tip"><strong>Tip:</strong> Try changing Primary Cohort Lock to <em>"Any Cohort (No Lock)"</em> to allow alternate lecture groups.</div>`;
+                if (state.primaryLectureGroupName || state.primaryLabSectionName) {
+                    tipHtml = `<div class="status-alert-tip"><strong>Tip:</strong> Try relaxing Primary Lecture Group or Primary Lab Section to <em>"Flexible"</em> to allow alternate class sections.</div>`;
                 } else {
                     tipHtml = `<div class="status-alert-tip"><strong>Tip:</strong> Mutually exclusive class times detected across selected courses (${state.selectedOfferings.size} courses). Try unchecking one course to isolate schedule collisions.</div>`;
                 }

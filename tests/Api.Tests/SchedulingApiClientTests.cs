@@ -168,7 +168,8 @@ public class SchedulingApiClientTests
         var request = new GenerateScheduleRequest
         {
             AcademicLevelNumber = 1,
-            AssignedPrimaryGroupId = primaryGroupId,
+            PrimaryLectureGroupName = "Lecture Group 1",
+            PrimaryLabSectionName = "Lab Section 2",
             SelectedCourseOfferingIds = [offeringId]
         };
 
@@ -225,7 +226,8 @@ public class SchedulingApiClientTests
         Assert.Equal("/api/schedules/generate", requestedUri);
         Assert.Equal(HttpMethod.Post, requestedMethod);
         Assert.Contains(offeringId.ToString(), receivedPayload);
-        Assert.Contains(primaryGroupId.ToString(), receivedPayload);
+        Assert.Contains("Lecture Group 1", receivedPayload);
+        Assert.Contains("Lab Section 2", receivedPayload);
 
         Assert.True(response.IsSuccess);
         Assert.Single(response.Schedules);
@@ -262,4 +264,57 @@ public class SchedulingApiClientTests
         Assert.False(result.IsSuccess);
         Assert.Equal("Invalid course offering specified.", result.ErrorMessage);
     }
+
+    [Fact]
+    public async Task GenerateSchedulesAsync_WithRawJsonStringEnumDayOfWeek_SuccessfullyDeserializes()
+    {
+        // Arrange
+        var request = new GenerateScheduleRequest { AcademicLevelNumber = 4 };
+
+        const string rawJsonResponse = """
+        {
+            "isSuccess": true,
+            "totalCombinationsEvaluated": 1,
+            "schedules": [
+                {
+                    "scheduleId": "c0a80101-0000-0000-0000-000000000001",
+                    "selectedGroups": [
+                        {
+                            "groupId": "c0a80101-0000-0000-0000-000000000002",
+                            "groupName": "Group 1",
+                            "courseCode": "CS101",
+                            "activityType": "Lecture",
+                            "meetings": [
+                                {
+                                    "dayOfWeek": "Wednesday",
+                                    "startTime": "13:00:00",
+                                    "endTime": "15:00:00",
+                                    "room": "Lab IOT1"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
+
+        var client = CreateClient(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(rawJsonResponse, System.Text.Encoding.UTF8, "application/json")
+        });
+
+        // Act
+        var result = await client.GenerateSchedulesAsync(request);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Schedules);
+        var meeting = result.Schedules[0].SelectedGroups[0].Meetings[0];
+        Assert.Equal(DayOfWeek.Wednesday, meeting.DayOfWeek);
+        Assert.Equal(new TimeOnly(13, 0), meeting.StartTime);
+        Assert.Equal(new TimeOnly(15, 0), meeting.EndTime);
+        Assert.Equal("Lab IOT1", meeting.Room);
+    }
 }
+
