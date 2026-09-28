@@ -254,6 +254,59 @@
             border-color: #b91c1c;
         }
 
+        .btn-outline {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            background: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary-border);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.825rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .btn-outline:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary-hover);
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 1px solid var(--border);
+            padding: 0.3rem 0.65rem;
+            border-radius: 5px;
+            font-size: 0.775rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .btn-action:hover {
+            background: var(--surface-hover);
+            color: var(--text);
+            border-color: var(--border-hover);
+        }
+        .btn-action.edit:hover {
+            background: var(--primary-light);
+            color: var(--primary);
+            border-color: var(--primary-border);
+        }
+        .btn-action.delete:hover {
+            background: var(--danger-light);
+            color: var(--danger);
+            border-color: var(--danger-border);
+        }
+
         .btn-sm {
             padding: 0.35rem 0.7rem;
             font-size: 0.8rem;
@@ -354,8 +407,9 @@
             border-radius: 12px;
             width: 100%;
             max-width: 480px;
+            max-height: 90vh;
+            overflow-y: auto;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
         }
         .modal-header {
             display: flex;
