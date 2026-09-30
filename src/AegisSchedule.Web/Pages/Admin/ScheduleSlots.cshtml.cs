@@ -166,4 +166,62 @@ public class ScheduleSlotsModel : PageModel
 
         return RedirectToPage(new { OfferingId = offeringId });
     }
+
+    public async Task<IActionResult> OnPostUpdateMeetingAsync(Guid offeringId, Guid meetingId, DayOfWeek dayOfWeek, TimeOnly startTime, TimeOnly endTime, string? room)
+    {
+        if (startTime >= endTime)
+        {
+            ErrorMessage = "Start time must be strictly earlier than end time.";
+            return RedirectToPage(new { OfferingId = offeringId });
+        }
+
+        try
+        {
+            await _adminClient.UpdateMeetingAsync(meetingId, new UpdateMeetingRequest
+            {
+                DayOfWeek = dayOfWeek,
+                StartTime = startTime,
+                EndTime = endTime,
+                Room = room?.Trim()
+            });
+
+            SuccessMessage = $"Meeting slot updated to {dayOfWeek} ({startTime:HH:mm} - {endTime:HH:mm}).";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update meeting slot.");
+            ErrorMessage = ex.Message;
+        }
+
+        return RedirectToPage(new { OfferingId = offeringId });
+    }
+
+    public async Task<IActionResult> OnPostDuplicateMeetingAsync(Guid offeringId, Guid targetGroupId, DayOfWeek dayOfWeek, TimeOnly startTime, TimeOnly endTime, string? room)
+    {
+        if (startTime >= endTime)
+        {
+            ErrorMessage = "Start time must be strictly earlier than end time.";
+            return RedirectToPage(new { OfferingId = offeringId });
+        }
+
+        try
+        {
+            await _adminClient.CreateMeetingAsync(targetGroupId, new CreateMeetingRequest
+            {
+                DayOfWeek = dayOfWeek,
+                StartTime = startTime,
+                EndTime = endTime,
+                Room = room?.Trim()
+            });
+
+            SuccessMessage = $"Duplicated meeting slot to {dayOfWeek} ({startTime:HH:mm} - {endTime:HH:mm}).";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to duplicate meeting slot.");
+            ErrorMessage = ex.Message;
+        }
+
+        return RedirectToPage(new { OfferingId = offeringId });
+    }
 }

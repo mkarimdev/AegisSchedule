@@ -1429,6 +1429,20 @@
         }
     }
 
+    function isLectureType(type) {
+        const t = String(type || "").trim().toLowerCase();
+        return t === "lecture" || t === "0";
+    }
+
+    function isLabType(type) {
+        const t = String(type || "").trim().toLowerCase();
+        return t === "lab" || t === "1";
+    }
+
+    function updateGroupDropdowns(offerings) {
+        populateCohortDropdowns(offerings);
+    }
+
     function populateCohortDropdowns(offerings) {
         const lectureSelect = document.getElementById("lectureGroupSelect");
         const labSelect = document.getElementById("labSectionSelect");
@@ -1445,13 +1459,12 @@
 
         (offerings || []).forEach(offering => {
             (offering.groups || []).forEach(grp => {
-                const type = (grp.activityType || "").toLowerCase();
                 const name = (grp.name || "").trim();
                 if (!name) return;
 
-                if (type === "lecture") {
+                if (isLectureType(grp.activityType)) {
                     lectureNames.add(name);
-                } else if (type === "lab") {
+                } else if (isLabType(grp.activityType)) {
                     labNames.add(name);
                 }
             });
@@ -1536,9 +1549,10 @@
             card.id = `course-card-${offering.id}`;
             card.onclick = () => toggleCourseSelection(offering.id);
 
-            const badgesHtml = (offering.activityTypes || []).map(act => 
-                `<span class="badge-act badge-${act}">${act}</span>`
-            ).join("");
+            const badgesHtml = (offering.activityTypes || []).map(act => {
+                const label = isLectureType(act) ? "Lecture" : isLabType(act) ? "Lab" : act;
+                return `<span class="badge-act badge-${label}">${label}</span>`;
+            }).join("");
 
             card.innerHTML = `
                 <div>
@@ -1801,18 +1815,17 @@
 
     function formatGroupLabel(activityType, rawGroupName) {
         const clean = (rawGroupName || "").trim();
-        const type = (activityType || "").trim().toLowerCase();
 
-        if (type === "lecture") {
+        if (isLectureType(activityType)) {
             if (/^lecture\s+group/i.test(clean)) return clean;
             if (/^group/i.test(clean)) return `Lecture ${clean}`;
             return `Lecture Group ${clean}`;
-        } else if (type === "lab") {
+        } else if (isLabType(activityType)) {
             if (/^lab\s+section/i.test(clean)) return clean;
             if (/^section/i.test(clean)) return `Lab ${clean}`;
             return `Lab Section ${clean}`;
         }
-        return `${activityType} ${clean}`.trim();
+        return `Lecture Group ${clean}`.trim();
     }
 
     function createMeetingCard(item) {

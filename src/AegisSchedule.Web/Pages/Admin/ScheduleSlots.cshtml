@@ -5,45 +5,46 @@
 }
 
 @functions {
-    public static string GetSectionHeader(string activityType) => activityType.ToLowerInvariant() switch
+    public static bool IsLabType(string activityType)
     {
-        "lecture" => "Lecture Groups",
-        "lab" => "Lab Sections",
-        _ => $"{activityType} Sections"
-    };
+        var t = activityType?.Trim().ToLowerInvariant() ?? "";
+        return t == "lab" || t == "1";
+    }
 
-    public static string GetSectionPlaceholder(string activityType) => activityType.ToLowerInvariant() switch
-    {
-        "lecture" => "e.g. 1, 2 or Group A",
-        "lab" => "e.g. 1, 16 or Section B",
-        _ => "e.g. 1 or Section 1"
-    };
+    public static string GetSectionHeader(string activityType) =>
+        IsLabType(activityType) ? "Lab Sections" : "Lecture Groups";
 
-    public static string GetAddButtonLabel(string activityType) => activityType.ToLowerInvariant() switch
-    {
-        "lecture" => "+ Add Lecture Group",
-        "lab" => "+ Add Lab Section",
-        _ => "+ Add Section"
-    };
+    public static string GetSectionPlaceholder(string activityType) =>
+        IsLabType(activityType) ? "e.g. 1, 16 or Section B" : "e.g. 1, 2 or Group A";
+
+    public static string GetAddButtonLabel(string activityType) =>
+        IsLabType(activityType) ? "+ Add Lab Section" : "+ Add Lecture Group";
+
+    public static string GetActivityTypeBadge(string activityType) =>
+        IsLabType(activityType) ? "Lab" : "Lecture";
 
     public static string FormatSectionTitle(string activityType, string groupName)
     {
         var clean = groupName?.Trim() ?? "";
-        return activityType.ToLowerInvariant() switch
+        if (IsLabType(activityType))
         {
-            "lecture" => clean.StartsWith("Lecture Group", StringComparison.OrdinalIgnoreCase)
-                ? clean
-                : clean.StartsWith("Group", StringComparison.OrdinalIgnoreCase)
-                    ? $"Lecture {clean}"
-                    : $"Lecture Group {clean}",
-            "lab" => clean.StartsWith("Lab Section", StringComparison.OrdinalIgnoreCase)
+            return clean.StartsWith("Lab Section", StringComparison.OrdinalIgnoreCase)
                 ? clean
                 : clean.StartsWith("Section", StringComparison.OrdinalIgnoreCase)
                     ? $"Lab {clean}"
-                    : $"Lab Section {clean}",
-            _ => $"{activityType} {clean}"
-        };
+                    : $"Lab Section {clean}";
+        }
+
+        // Map unmapped, numeric (e.g. "0", "2", old Tutorial), or any other type to Lecture Group by default
+        return clean.StartsWith("Lecture Group", StringComparison.OrdinalIgnoreCase)
+            ? clean
+            : clean.StartsWith("Group", StringComparison.OrdinalIgnoreCase)
+                ? $"Lecture {clean}"
+                : $"Lecture Group {clean}";
     }
+
+    public static string FormatSectionName(string activityType, string groupName) => FormatSectionTitle(activityType, groupName);
+    public static string formatSectionName(string activityType, string groupName) => FormatSectionTitle(activityType, groupName);
 }
 
 <div class="admin-container">
@@ -65,7 +66,7 @@
 
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
-        <div class="alert alert-danger">
+        <div id="errorAlertBanner" class="alert alert-danger">
             <span>@Model.ErrorMessage</span>
         </div>
     }
@@ -138,16 +139,16 @@
         <!-- Hierarchical Tree: Activities -> Groups -> Meetings -->
         @foreach (var activity in Model.OfferingDetail.Activities)
         {
-            <div class="activity-block card">
+            <div class="activity-block card" data-activity-type="@activity.Type">
                 <div class="activity-block-header">
                     <div class="activity-title-group">
-                        <span class="badge-act badge-@activity.Type large">@activity.Type</span>
+                        <span class="badge-act badge-@GetActivityTypeBadge(activity.Type) large">@GetActivityTypeBadge(activity.Type)</span>
                         <h3 class="activity-section-header">@GetSectionHeader(activity.Type)</h3>
-                        <span class="text-secondary" style="font-size: 0.85rem;">(@activity.Groups.Count @(activity.Type.Equals("Lecture", StringComparison.OrdinalIgnoreCase) ? "group" : "section")@(activity.Groups.Count == 1 ? "" : "s"))</span>
+                        <span class="text-secondary" style="font-size: 0.85rem;">(@activity.Groups.Count @(IsLabType(activity.Type) ? "section" : "group")@(activity.Groups.Count == 1 ? "" : "s"))</span>
                     </div>
 
-                    <button type="button" class="btn-subtle text-danger" onclick="openDeleteActivityModal('@activity.Id', '@activity.Type')">
-                        Remove @activity.Type Category
+                    <button type="button" class="btn-subtle text-danger" onclick="openDeleteActivityModal('@activity.Id', '@GetActivityTypeBadge(activity.Type)')">
+                        Remove @GetActivityTypeBadge(activity.Type) Category
                     </button>
                 </div>
 
@@ -166,7 +167,7 @@
                 @if (activity.Groups.Count == 0)
                 {
                     <div class="empty-sections-note">
-                        <span>No sections created yet for @activity.Type. Use the quick-add bar above to create sections.</span>
+                        <span>No sections created yet for @GetActivityTypeBadge(activity.Type). Use the quick-add bar above to create sections.</span>
                     </div>
                 }
                 else
@@ -178,7 +179,7 @@
                                     <th style="width: 170px;">Section Name</th>
                                     <th>Assigned Weekly Meeting</th>
                                     <th style="width: 130px;">Room</th>
-                                    <th style="width: 220px; text-align: right;">Actions</th>
+                                    <th style="width: 270px; text-align: right;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -187,6 +188,8 @@
                                     var sectionTitle = FormatSectionTitle(activity.Type, group.Name);
                                     if (group.Meetings.Count == 0)
                                     {
+                                        var priorGroupWithMeeting = activity.Groups.FirstOrDefault(g => g.Id != group.Id && g.Meetings.Count > 0);
+                                        var priorMeeting = priorGroupWithMeeting?.Meetings.FirstOrDefault();
                                         <!-- Unassigned Section Row: Shows inline slot creator directly in table -->
                                         <tr>
                                             <td class="col-section font-semibold">
@@ -196,7 +199,7 @@
                                                 </div>
                                             </td>
                                             <td colspan="3" class="col-inline-slot-entry">
-                                                <form method="post" asp-page-handler="CreateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this)">
+                                                <form method="post" asp-page-handler="CreateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this, '@activity.Type')">
                                                     <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
                                                     <input type="hidden" name="groupId" value="@group.Id" />
 
@@ -225,6 +228,17 @@
                                                         <input type="text" name="room" placeholder="Room (opt)" class="form-input form-input-xs input-room" />
 
                                                         <button type="submit" class="btn-primary btn-xs btn-save-slot">+ Save Slot</button>
+
+                                                        @if (priorMeeting != null && priorGroupWithMeeting != null)
+                                                        {
+                                                            var priorTitle = FormatSectionTitle(activity.Type, priorGroupWithMeeting.Name);
+                                                            var shortDay = priorMeeting.DayOfWeek.ToString().Length >= 3 ? priorMeeting.DayOfWeek.ToString().Substring(0, 3) : priorMeeting.DayOfWeek.ToString();
+                                                            <div class="quick-copy-wrap">
+                                                                <button type="button" class="btn-copy-chip" title="Copy timing and room from @priorTitle" onclick="copyMeetingToInlineForm(this, '@priorMeeting.DayOfWeek', '@priorMeeting.StartTime', '@priorMeeting.EndTime', '@(priorMeeting.Room ?? "")')">
+                                                                    📋 Copy from @priorTitle (@shortDay @priorMeeting.StartTime&ndash;@priorMeeting.EndTime@(string.IsNullOrEmpty(priorMeeting.Room) ? "" : $" • {priorMeeting.Room}"))
+                                                                </button>
+                                                            </div>
+                                                        }
                                                     </div>
                                                 </form>
                                             </td>
@@ -249,8 +263,50 @@
                                                 <span class="tag-room">@(string.IsNullOrWhiteSpace(m.Room) ? "TBA" : m.Room)</span>
                                             </td>
                                             <td class="col-actions">
+                                                <button type="button" class="btn-outline btn-xs" title="Edit this slot inline" onclick="toggleEditMeetingRow('edit-meeting-@m.Id')">Edit</button>
+                                                <button type="button" class="btn-outline btn-xs" title="Clone / duplicate this slot" onclick="openDuplicateMeetingModal('@m.Id', '@group.Id', '@m.DayOfWeek', '@m.StartTime', '@m.EndTime', '@(m.Room ?? "")', '@sectionTitle')">Clone</button>
                                                 <button type="button" class="btn-action delete btn-xs" title="Remove this slot" onclick="openDeleteMeetingModal('@m.Id', '@m.DayOfWeek (@m.StartTime - @m.EndTime)')">Remove Slot</button>
                                                 <button type="button" class="btn-outline btn-xs" title="Add another slot to this section" onclick="toggleExtraSlotRow('extra-@group.Id')">+ Extra Slot</button>
+                                            </td>
+                                        </tr>
+                                        <!-- Collapsible Inline Edit Slot Row -->
+                                        <tr id="edit-meeting-@m.Id" class="edit-slot-row" style="display: none;">
+                                            <td class="col-section-sub">
+                                                <span class="badge-edit-label">✎ Edit Slot:</span>
+                                            </td>
+                                            <td colspan="3" class="col-inline-slot-entry">
+                                                <form method="post" asp-page-handler="UpdateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this, '@activity.Type')">
+                                                    <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                                                    <input type="hidden" name="meetingId" value="@m.Id" />
+
+                                                    <div class="inline-entry-grid">
+                                                        <select name="dayOfWeek" class="form-select form-select-xs select-day" required>
+                                                            <option value="Saturday" selected="@(m.DayOfWeek == DayOfWeek.Saturday)">Saturday</option>
+                                                            <option value="Sunday" selected="@(m.DayOfWeek == DayOfWeek.Sunday)">Sunday</option>
+                                                            <option value="Monday" selected="@(m.DayOfWeek == DayOfWeek.Monday)">Monday</option>
+                                                            <option value="Tuesday" selected="@(m.DayOfWeek == DayOfWeek.Tuesday)">Tuesday</option>
+                                                            <option value="Wednesday" selected="@(m.DayOfWeek == DayOfWeek.Wednesday)">Wednesday</option>
+                                                            <option value="Thursday" selected="@(m.DayOfWeek == DayOfWeek.Thursday)">Thursday</option>
+                                                            <option value="Friday" selected="@(m.DayOfWeek == DayOfWeek.Friday)">Friday</option>
+                                                        </select>
+
+                                                        <input type="time" name="startTime" class="form-input form-input-xs input-time" value="@m.StartTime" oninput="onTimeInputChange(this)" required title="Start Time" />
+                                                        <span class="time-sep">&ndash;</span>
+                                                        <input type="time" name="endTime" class="form-input form-input-xs input-time" value="@m.EndTime" oninput="onTimeInputChange(this)" required title="End Time" />
+
+                                                        <div class="preset-pill-group">
+                                                            <button type="button" class="btn-preset-pill @(m.StartTime == "09:00" && m.EndTime == "11:00" ? "active" : "")" onclick="setPresetInputs(this, '09:00', '11:00')">09:00–11:00</button>
+                                                            <button type="button" class="btn-preset-pill @(m.StartTime == "11:00" && m.EndTime == "13:00" ? "active" : "")" onclick="setPresetInputs(this, '11:00', '13:00')">11:00–13:00</button>
+                                                            <button type="button" class="btn-preset-pill @(m.StartTime == "13:00" && m.EndTime == "15:00" ? "active" : "")" onclick="setPresetInputs(this, '13:00', '15:00')">13:00–15:00</button>
+                                                            <button type="button" class="btn-preset-pill @(m.StartTime == "15:00" && m.EndTime == "17:00" ? "active" : "")" onclick="setPresetInputs(this, '15:00', '17:00')">15:00–17:00</button>
+                                                        </div>
+
+                                                        <input type="text" name="room" value="@m.Room" placeholder="Room (opt)" class="form-input form-input-xs input-room" />
+
+                                                        <button type="submit" class="btn-primary btn-xs btn-save-slot">Save Changes</button>
+                                                        <button type="button" class="btn-subtle btn-xs" onclick="toggleEditMeetingRow('edit-meeting-@m.Id')">Cancel</button>
+                                                    </div>
+                                                </form>
                                             </td>
                                         </tr>
                                         <!-- Expandable Extra Slot Row -->
@@ -259,7 +315,7 @@
                                                 <span class="text-secondary text-xs">↳ Extra Slot:</span>
                                             </td>
                                             <td colspan="3" class="col-inline-slot-entry">
-                                                <form method="post" asp-page-handler="CreateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this)">
+                                                <form method="post" asp-page-handler="CreateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this, '@activity.Type')">
                                                     <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
                                                     <input type="hidden" name="groupId" value="@group.Id" />
 
@@ -313,6 +369,8 @@
                                                             <span class="badge-slot-day">@meeting.DayOfWeek</span>
                                                             <span class="badge-slot-time">@meeting.StartTime &ndash; @meeting.EndTime</span>
                                                             <span class="tag-room">@(string.IsNullOrWhiteSpace(meeting.Room) ? "TBA" : meeting.Room)</span>
+                                                            <button type="button" class="btn-icon-action" title="Edit slot inline" onclick="toggleEditMeetingRow('edit-meeting-@meeting.Id')">✎</button>
+                                                            <button type="button" class="btn-icon-action" title="Clone / duplicate slot" onclick="openDuplicateMeetingModal('@meeting.Id', '@group.Id', '@meeting.DayOfWeek', '@meeting.StartTime', '@meeting.EndTime', '@(meeting.Room ?? "")', '@sectionTitle')">⧉</button>
                                                             <button type="button" class="btn-icon-delete" title="Remove slot" onclick="openDeleteMeetingModal('@meeting.Id', '@meeting.DayOfWeek (@meeting.StartTime - @meeting.EndTime)')">&times;</button>
                                                         </div>
                                                     }
@@ -322,13 +380,56 @@
                                                 <button type="button" class="btn-outline btn-xs" title="Add another slot to this section" onclick="toggleExtraSlotRow('extra-@group.Id')">+ Extra Slot</button>
                                             </td>
                                         </tr>
+                                        @foreach (var meeting in group.Meetings)
+                                        {
+                                            <!-- Collapsible Inline Edit Slot Row for Multi-Slot Item -->
+                                            <tr id="edit-meeting-@meeting.Id" class="edit-slot-row" style="display: none;">
+                                                <td class="col-section-sub">
+                                                    <span class="badge-edit-label">✎ Edit Slot:</span>
+                                                </td>
+                                                <td colspan="3" class="col-inline-slot-entry">
+                                                    <form method="post" asp-page-handler="UpdateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this, '@activity.Type')">
+                                                        <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
+                                                        <input type="hidden" name="meetingId" value="@meeting.Id" />
+
+                                                        <div class="inline-entry-grid">
+                                                            <select name="dayOfWeek" class="form-select form-select-xs select-day" required>
+                                                                <option value="Saturday" selected="@(meeting.DayOfWeek == DayOfWeek.Saturday)">Saturday</option>
+                                                                <option value="Sunday" selected="@(meeting.DayOfWeek == DayOfWeek.Sunday)">Sunday</option>
+                                                                <option value="Monday" selected="@(meeting.DayOfWeek == DayOfWeek.Monday)">Monday</option>
+                                                                <option value="Tuesday" selected="@(meeting.DayOfWeek == DayOfWeek.Tuesday)">Tuesday</option>
+                                                                <option value="Wednesday" selected="@(meeting.DayOfWeek == DayOfWeek.Wednesday)">Wednesday</option>
+                                                                <option value="Thursday" selected="@(meeting.DayOfWeek == DayOfWeek.Thursday)">Thursday</option>
+                                                                <option value="Friday" selected="@(meeting.DayOfWeek == DayOfWeek.Friday)">Friday</option>
+                                                            </select>
+
+                                                            <input type="time" name="startTime" class="form-input form-input-xs input-time" value="@meeting.StartTime" oninput="onTimeInputChange(this)" required title="Start Time" />
+                                                            <span class="time-sep">&ndash;</span>
+                                                            <input type="time" name="endTime" class="form-input form-input-xs input-time" value="@meeting.EndTime" oninput="onTimeInputChange(this)" required title="End Time" />
+
+                                                            <div class="preset-pill-group">
+                                                                <button type="button" class="btn-preset-pill @(meeting.StartTime == "09:00" && meeting.EndTime == "11:00" ? "active" : "")" onclick="setPresetInputs(this, '09:00', '11:00')">09:00–11:00</button>
+                                                                <button type="button" class="btn-preset-pill @(meeting.StartTime == "11:00" && meeting.EndTime == "13:00" ? "active" : "")" onclick="setPresetInputs(this, '11:00', '13:00')">11:00–13:00</button>
+                                                                <button type="button" class="btn-preset-pill @(meeting.StartTime == "13:00" && meeting.EndTime == "15:00" ? "active" : "")" onclick="setPresetInputs(this, '13:00', '15:00')">13:00–15:00</button>
+                                                                <button type="button" class="btn-preset-pill @(meeting.StartTime == "15:00" && meeting.EndTime == "17:00" ? "active" : "")" onclick="setPresetInputs(this, '15:00', '17:00')">15:00–17:00</button>
+                                                            </div>
+
+                                                            <input type="text" name="room" value="@meeting.Room" placeholder="Room (opt)" class="form-input form-input-xs input-room" />
+
+                                                            <button type="submit" class="btn-primary btn-xs btn-save-slot">Save Changes</button>
+                                                            <button type="button" class="btn-subtle btn-xs" onclick="toggleEditMeetingRow('edit-meeting-@meeting.Id')">Cancel</button>
+                                                        </div>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        }
                                         <!-- Expandable Extra Slot Row -->
                                         <tr id="extra-@group.Id" class="extra-slot-row" style="display: none;">
                                             <td class="col-section-sub">
                                                 <span class="text-secondary text-xs">↳ Extra Slot:</span>
                                             </td>
                                             <td colspan="3" class="col-inline-slot-entry">
-                                                <form method="post" asp-page-handler="CreateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this)">
+                                                <form method="post" asp-page-handler="CreateMeeting" class="inline-slot-entry-form" onsubmit="saveRoomOnSubmit(this, '@activity.Type')">
                                                     <input type="hidden" name="offeringId" value="@Model.OfferingDetail.Id" />
                                                     <input type="hidden" name="groupId" value="@group.Id" />
 
@@ -433,6 +534,75 @@
             <div class="modal-footer">
                 <button type="button" class="btn-subtle" onclick="closeModal('deleteMeetingModal')">Cancel</button>
                 <button type="submit" class="btn-danger">Delete Slot</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Duplicate Meeting Slot -->
+<div id="duplicateMeetingModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Clone Meeting Slot</h3>
+            <button type="button" class="btn-close" onclick="closeModal('duplicateMeetingModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="DuplicateMeeting">
+            <input type="hidden" name="offeringId" value="@Model.OfferingDetail?.Id" />
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+                    Source: <strong id="duplicateSourceInfo" class="text-primary"></strong>
+                </p>
+
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                    <label class="form-label" for="duplicateTargetGroupId">Target Section Group</label>
+                    <select id="duplicateTargetGroupId" name="targetGroupId" class="form-select" required>
+                        @if (Model.OfferingDetail != null)
+                        {
+                            @foreach (var act in Model.OfferingDetail.Activities)
+                            {
+                                <optgroup label="@act.Type Sections">
+                                    @foreach (var g in act.Groups)
+                                    {
+                                        <option value="@g.Id">@FormatSectionTitle(act.Type, g.Name)</option>
+                                    }
+                                </optgroup>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                    <label class="form-label" for="duplicateDayOfWeek">Target Day</label>
+                    <select id="duplicateDayOfWeek" name="dayOfWeek" class="form-select" required>
+                        <option value="Saturday">Saturday</option>
+                        <option value="Sunday">Sunday</option>
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; margin-bottom: 0.85rem;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="duplicateStartTime">Start Time</label>
+                        <input type="time" id="duplicateStartTime" name="startTime" class="form-input" required />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="duplicateEndTime">End Time</label>
+                        <input type="time" id="duplicateEndTime" name="endTime" class="form-input" required />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="duplicateRoom">Room (Optional)</label>
+                    <input type="text" id="duplicateRoom" name="room" class="form-input" placeholder="e.g. Hall 1 or Lab B" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('duplicateMeetingModal')">Cancel</button>
+                <button type="submit" class="btn-primary">Clone Slot</button>
             </div>
         </form>
     </div>
@@ -708,9 +878,69 @@
     }
 
     .col-actions {
-        width: 220px;
+        min-width: 250px;
         text-align: right;
         white-space: nowrap;
+    }
+
+    .btn-icon-action {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0.15rem 0.35rem;
+        border-radius: 4px;
+        transition: all 0.15s ease;
+    }
+
+    .btn-icon-action:hover {
+        color: var(--primary);
+        background: var(--primary-light);
+    }
+
+    .badge-edit-label {
+        font-size: 0.775rem;
+        font-weight: 700;
+        color: #b45309;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+    }
+
+    .section-data-table tr.edit-slot-row td {
+        background: #fffbeb;
+        border-top: 1px dashed #fcd34d;
+        border-bottom: 1px solid #fde68a;
+        padding: 0.55rem 1rem;
+    }
+
+    .btn-copy-chip {
+        background: #eff6ff;
+        border: 1px dashed #93c5fd;
+        color: #1d4ed8;
+        font-size: 0.725rem;
+        font-weight: 600;
+        padding: 0.25rem 0.55rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .btn-copy-chip:hover {
+        background: #dbeafe;
+        border-color: #3b82f6;
+    }
+
+    .quick-copy-wrap {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.45rem;
     }
 
     /* Multi-slot items */
@@ -852,36 +1082,46 @@
     const SCROLL_STORAGE_KEY = "uni_admin_schedule_scroll_y";
     const ROOM_STORAGE_KEY = "uni_admin_last_room";
 
-    function getStoredRoom() {
+    function getStoredRoom(actType) {
         try {
+            if (actType) {
+                const specific = localStorage.getItem(`uni_admin_last_room_${actType}`);
+                if (specific) return specific;
+            }
             return localStorage.getItem(ROOM_STORAGE_KEY) || "";
         } catch {
             return "";
         }
     }
 
-    function setStoredRoom(room) {
+    function setStoredRoom(room, actType) {
         if (!room) return;
         try {
-            localStorage.setItem(ROOM_STORAGE_KEY, room.trim());
+            const trimmed = room.trim();
+            if (actType) {
+                localStorage.setItem(`uni_admin_last_room_${actType}`, trimmed);
+            }
+            localStorage.setItem(ROOM_STORAGE_KEY, trimmed);
         } catch {}
     }
 
-    function syncRoomInputs(room) {
+    function syncRoomInputs(room, actType) {
         if (!room) return;
-        document.querySelectorAll(".input-room").forEach(inp => {
+        const selector = actType ? `.activity-block[data-activity-type='${actType}'] .input-room` : ".input-room";
+        document.querySelectorAll(selector).forEach(inp => {
             if (!inp.value || inp.value.trim() === "") {
                 inp.value = room;
             }
         });
     }
 
-    function saveRoomOnSubmit(form) {
+    function saveRoomOnSubmit(form, actType) {
+        const act = actType || form.dataset.activityType || form.closest(".activity-block")?.dataset.activityType || "";
         const roomInput = form.querySelector(".input-room");
         if (roomInput && roomInput.value.trim()) {
             const val = roomInput.value.trim();
-            setStoredRoom(val);
-            syncRoomInputs(val);
+            setStoredRoom(val, act);
+            syncRoomInputs(val, act);
         }
     }
 
@@ -904,9 +1144,37 @@
     function onTimeInputChange(input) {
         const form = input.closest("form");
         if (!form) return;
+        const startInput = form.querySelector("input[name='startTime']");
+        const endInput = form.querySelector("input[name='endTime']");
         const pillGroup = form.querySelector(".preset-pill-group");
-        if (pillGroup) {
-            pillGroup.querySelectorAll(".btn-preset-pill").forEach(p => p.classList.remove("active"));
+        if (!pillGroup || !startInput || !endInput) return;
+
+        const currentPair = `${startInput.value}-${endInput.value}`;
+        pillGroup.querySelectorAll(".btn-preset-pill").forEach(p => {
+            const pPair = p.textContent.replace('–', '-').replace('—', '-').trim();
+            if (pPair === currentPair) {
+                p.classList.add("active");
+            } else {
+                p.classList.remove("active");
+            }
+        });
+    }
+
+    function toggleEditMeetingRow(rowId) {
+        const row = document.getElementById(rowId);
+        if (!row) return;
+        const isHidden = (row.style.display === "none" || !row.style.display);
+        row.style.display = isHidden ? "table-row" : "none";
+        if (isHidden) {
+            const startInput = row.querySelector("input[name='startTime']");
+            if (startInput) {
+                onTimeInputChange(startInput);
+            }
+            const roomInp = row.querySelector(".input-room");
+            if (roomInp && !roomInp.value) {
+                const actType = row.closest(".activity-block")?.dataset.activityType || "";
+                roomInp.value = getStoredRoom(actType);
+            }
         }
     }
 
@@ -916,11 +1184,79 @@
         const isHidden = (row.style.display === "none" || !row.style.display);
         row.style.display = isHidden ? "table-row" : "none";
         if (isHidden) {
+            const startInput = row.querySelector("input[name='startTime']");
+            if (startInput) {
+                onTimeInputChange(startInput);
+            }
             const roomInp = row.querySelector(".input-room");
             if (roomInp && !roomInp.value) {
-                roomInp.value = getStoredRoom();
+                const actType = row.closest(".activity-block")?.dataset.activityType || "";
+                roomInp.value = getStoredRoom(actType);
             }
         }
+    }
+
+    function copyMeetingToInlineForm(btn, day, start, end, room) {
+        const tr = btn.closest("tr");
+        if (!tr) return;
+        const form = tr.querySelector("form");
+        if (!form) return;
+
+        const daySelect = form.querySelector("select[name='dayOfWeek']");
+        const startInp = form.querySelector("input[name='startTime']");
+        const endInp = form.querySelector("input[name='endTime']");
+        const roomInp = form.querySelector("input[name='room']");
+
+        if (daySelect) daySelect.value = day;
+        if (startInp) startInp.value = start;
+        if (endInp) endInp.value = end;
+        if (roomInp && room) roomInp.value = room;
+
+        if (startInp) {
+            onTimeInputChange(startInp);
+        }
+    }
+
+    function openDuplicateMeetingModal(meetingId, sourceGroupId, dayOfWeek, startTime, endTime, room, sectionTitle) {
+        const infoSpan = document.getElementById("duplicateSourceInfo");
+        if (infoSpan) {
+            infoSpan.textContent = `${sectionTitle} (${dayOfWeek} ${startTime}–${endTime})`;
+        }
+        const groupSelect = document.getElementById("duplicateTargetGroupId");
+        if (groupSelect) {
+            groupSelect.value = sourceGroupId;
+        }
+        const daySelect = document.getElementById("duplicateDayOfWeek");
+        if (daySelect) {
+            daySelect.value = dayOfWeek;
+        }
+        const startInp = document.getElementById("duplicateStartTime");
+        if (startInp) {
+            startInp.value = startTime;
+        }
+        const endInp = document.getElementById("duplicateEndTime");
+        if (endInp) {
+            endInp.value = endTime;
+        }
+        const roomInp = document.getElementById("duplicateRoom");
+        if (roomInp) {
+            roomInp.value = room || "";
+        }
+
+        document.getElementById("duplicateMeetingModal").style.display = "flex";
+    }
+
+    function formatSectionName(activityType, groupName) {
+        const clean = (groupName || "").trim();
+        const t = String(activityType || "").trim().toLowerCase();
+        if (t === "lab" || t === "1") {
+            if (/^lab\s+section/i.test(clean)) return clean;
+            if (/^section/i.test(clean)) return `Lab ${clean}`;
+            return `Lab Section ${clean}`;
+        }
+        if (/^lecture\s+group/i.test(clean)) return clean;
+        if (/^group/i.test(clean)) return `Lecture ${clean}`;
+        return `Lecture Group ${clean}`;
     }
 
     function openDeleteActivityModal(activityId, activityType) {
@@ -957,33 +1293,44 @@
     });
 
     document.addEventListener("DOMContentLoaded", () => {
-        // Restore scroll position
-        const savedY = sessionStorage.getItem(SCROLL_STORAGE_KEY);
-        if (savedY !== null) {
-            const y = parseInt(savedY, 10);
-            if (!isNaN(y)) {
-                window.scrollTo({ top: y, behavior: "instant" });
-                requestAnimationFrame(() => {
-                    window.scrollTo({ top: y, behavior: "instant" });
-                });
-                setTimeout(() => {
-                    window.scrollTo({ top: y, behavior: "instant" });
-                }, 50);
-            }
+        // Automatic Scroll to Error Alert Banner if an error occurred (e.g. meeting overlap)
+        const errorBanner = document.getElementById("errorAlertBanner");
+        if (errorBanner) {
+            errorBanner.scrollIntoView({ behavior: "smooth", block: "center" });
             sessionStorage.removeItem(SCROLL_STORAGE_KEY);
+        } else {
+            // Restore scroll position
+            const savedY = sessionStorage.getItem(SCROLL_STORAGE_KEY);
+            if (savedY !== null) {
+                const y = parseInt(savedY, 10);
+                if (!isNaN(y)) {
+                    window.scrollTo({ top: y, behavior: "instant" });
+                    requestAnimationFrame(() => {
+                        window.scrollTo({ top: y, behavior: "instant" });
+                    });
+                    setTimeout(() => {
+                        window.scrollTo({ top: y, behavior: "instant" });
+                    }, 50);
+                }
+                sessionStorage.removeItem(SCROLL_STORAGE_KEY);
+            }
         }
 
-        // Initialize smart room memory
-        const stored = getStoredRoom();
-        if (stored) {
-            syncRoomInputs(stored);
-        }
+        // Initialize smart room memory per activity block
+        document.querySelectorAll(".activity-block").forEach(block => {
+            const actType = block.dataset.activityType || "";
+            const stored = getStoredRoom(actType);
+            if (stored) {
+                syncRoomInputs(stored, actType);
+            }
+        });
 
         document.querySelectorAll(".input-room").forEach(inp => {
             inp.addEventListener("change", () => {
                 if (inp.value.trim()) {
-                    setStoredRoom(inp.value.trim());
-                    syncRoomInputs(inp.value.trim());
+                    const actType = inp.closest(".activity-block")?.dataset.activityType || "";
+                    setStoredRoom(inp.value.trim(), actType);
+                    syncRoomInputs(inp.value.trim(), actType);
                 }
             });
         });
