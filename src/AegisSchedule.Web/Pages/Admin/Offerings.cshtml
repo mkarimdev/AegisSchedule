@@ -1,0 +1,444 @@
+@page
+@model AegisSchedule.Web.Pages.Admin.OfferingsModel
+@{
+    ViewData["Title"] = "Terms & Offerings - Admin";
+}
+
+<div class="admin-container">
+    <partial name="_AdminNav" model="@("Offerings")" />
+
+    <div class="admin-header-row">
+        <div>
+            <h1>Terms & Course Offerings</h1>
+            <p class="admin-subtitle">Activate registration terms and allocate catalog courses into active offerings.</p>
+        </div>
+        <button type="button" class="btn-primary" onclick="openCreateTermModal()">
+            <span>+ Create New Term</span>
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">
+            <span>@Model.SuccessMessage</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <span>@Model.ErrorMessage</span>
+        </div>
+    }
+
+    <!-- Term Context & Control Banner -->
+    <div class="card term-banner-card">
+        <div class="term-banner-left">
+            <span class="term-status-badge @(Model.ActiveTerm?.Id == Model.SelectedTermId ? "current" : "")">
+                @(Model.ActiveTerm?.Id == Model.SelectedTermId ? "★ Active Term" : "Viewing Term")
+            </span>
+            <form method="get" class="term-selector-form">
+                <label for="selectTerm" class="form-label" style="margin-bottom: 0;">Academic Term:</label>
+                <select id="selectTerm" name="SelectedTermId" class="form-select form-select-sm" onchange="this.form.submit()" style="width: auto; min-width: 200px;">
+                    @foreach (var term in Model.Terms)
+                    {
+                        <option value="@term.Id" selected="@(Model.SelectedTermId == term.Id)">
+                            @term.DisplayName @(term.IsCurrent ? "(Current Active)" : "")
+                        </option>
+                    }
+                </select>
+            </form>
+        </div>
+
+        @if (Model.SelectedTermId.HasValue && Model.ActiveTerm?.Id != Model.SelectedTermId)
+        {
+            <form method="post" asp-page-handler="SetCurrentTerm">
+                <input type="hidden" name="termId" value="@Model.SelectedTermId" />
+                <button type="submit" class="btn-secondary btn-sm" title="Make this term active for student schedule generation">
+                    Set as Current Active Term
+                </button>
+            </form>
+        }
+    </div>
+
+    <!-- Course Offering Allocator -->
+    <div class="card allocator-card">
+        <h3>Offer Course in This Term</h3>
+        <p class="text-secondary" style="font-size: 0.85rem; margin-bottom: 0.85rem;">Select a catalog course to open sections for registration in the selected term.</p>
+        
+        @if (Model.AvailableCourses.Count == 0)
+        {
+            <p class="text-secondary" style="font-size: 0.875rem;">All catalog courses are already offered in this term, or no courses exist in catalog.</p>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="CreateOffering" class="allocator-form">
+                <input type="hidden" name="SelectedTermId" value="@Model.SelectedTermId" />
+                <div class="allocator-row">
+                    <select name="courseId" class="form-select" style="max-width: 480px;" required>
+                        <option value="">Select course to offer...</option>
+                        @foreach (var course in Model.AvailableCourses)
+                        {
+                            <option value="@course.Id">@course.Code - @course.Name (Level @course.AcademicLevelNumber)</option>
+                        }
+                    </select>
+                    <button type="submit" class="btn-primary">
+                        <span>+ Offer Course in Term</span>
+                    </button>
+                </div>
+            </form>
+        }
+    </div>
+
+    <!-- Active Offerings Table -->
+    <div class="card table-card">
+        <div class="table-header-strip">
+            <h3>Active Offerings (@Model.Offerings.Count)</h3>
+        </div>
+
+        @if (Model.Offerings.Count == 0)
+        {
+            <div class="empty-state">
+                <p>No courses are currently offered in this term. Use the allocator above to add courses.</p>
+            </div>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">Code</th>
+                        <th>Course Title</th>
+                        <th style="width: 110px;">Level</th>
+                        <th>Configured Activities</th>
+                        <th style="width: 250px; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var offering in Model.Offerings)
+                    {
+                        <tr>
+                            <td>
+                                <span class="course-code-badge">@offering.CourseCode</span>
+                            </td>
+                            <td class="font-semibold">@offering.CourseName</td>
+                            <td>
+                                <span class="level-pill-badge">Level @offering.AcademicLevelNumber</span>
+                            </td>
+                            <td>
+                                @if (offering.ActivityTypes != null && offering.ActivityTypes.Count > 0)
+                                {
+                                    <div class="activity-pill-group">
+                                        @foreach (var act in offering.ActivityTypes)
+                                        {
+                                            <span class="badge-act badge-@act">@act</span>
+                                        }
+                                        <span class="text-secondary" style="font-size: 0.775rem;">(@offering.Groups.Count section@(offering.Groups.Count == 1 ? "" : "s"))</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted" style="font-size: 0.8rem;">No activities configured</span>
+                                }
+                            </td>
+                            <td style="text-align: right;">
+                                <a href="/Admin/ScheduleSlots?offeringId=@offering.Id" class="btn-action edit" style="text-decoration: none;">
+                                    Configure Slots &rarr;
+                                </a>
+                                <button type="button" class="btn-action delete" onclick="openDeleteOfferingModal('@offering.Id', '@offering.CourseCode')">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<!-- Modal: Create New Term -->
+<div id="createTermModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Create Academic Term</h3>
+            <button type="button" class="btn-close" onclick="closeModal('createTermModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="CreateTerm">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="termSemester">Semester</label>
+                    <select id="termSemester" name="semester" class="form-select" required>
+                        <option value="Fall">Fall</option>
+                        <option value="Spring">Spring</option>
+                        <option value="Summer">Summer</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="termYear">Year</label>
+                    <input type="number" id="termYear" name="year" class="form-input" value="@(DateTime.UtcNow.Year)" min="2020" max="2100" required />
+                </div>
+                <div class="form-check">
+                    <label>
+                        <input type="checkbox" name="isCurrent" value="true" checked />
+                        <span>Set as current active registration term immediately</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('createTermModal')">Cancel</button>
+                <button type="submit" class="btn-primary">Create Term</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Delete Offering Confirmation -->
+<div id="deleteOfferingModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="text-danger">Remove Course Offering</h3>
+            <button type="button" class="btn-close" onclick="closeModal('deleteOfferingModal')">&times;</button>
+        </div>
+        <form method="post" asp-page-handler="DeleteOffering">
+            <input type="hidden" name="SelectedTermId" value="@Model.SelectedTermId" />
+            <input type="hidden" id="deleteOfferingId" name="offeringId" />
+            <div class="modal-body">
+                <p>Are you sure you want to remove <strong id="deleteOfferingCode"></strong> from this term?</p>
+                <p class="text-danger" style="font-size: 0.85rem; margin-top: 0.5rem;">This will permanently remove all activities, sections (groups), and meeting time slots configured for this offering.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-subtle" onclick="closeModal('deleteOfferingModal')">Cancel</button>
+                <button type="submit" class="btn-danger">Remove Offering</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .admin-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .admin-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .admin-header-row h1 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.02em;
+    }
+
+    .admin-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-top: 0.2rem;
+    }
+
+    .term-banner-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        background: #f8fafc;
+    }
+
+    .term-banner-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .term-selector-form {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .term-status-badge {
+        font-size: 0.775rem;
+        font-weight: 600;
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        background: #e2e8f0;
+        color: var(--text-secondary);
+    }
+
+    .term-status-badge.current {
+        background: #dcfce7;
+        color: #15803d;
+        border: 1px solid #bbf7d0;
+    }
+
+    .allocator-card {
+        padding: 1.25rem;
+    }
+
+    .allocator-card h3 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+
+    .allocator-row {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .table-card {
+        padding: 0;
+        overflow-x: auto;
+    }
+
+    .table-header-strip {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .table-header-strip h3 {
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .activity-pill-group {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+    }
+
+    .badge-act {
+        font-size: 0.725rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+    }
+
+    .badge-Lecture { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    .badge-Lab { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        text-align: left;
+    }
+
+    .data-table th {
+        background: var(--surface-hover);
+        padding: 0.75rem 1.25rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .data-table td {
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        vertical-align: middle;
+    }
+
+    .data-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .course-code-badge {
+        font-weight: 700;
+        color: var(--primary);
+        background: var(--primary-light);
+        padding: 0.25rem 0.55rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+
+    .level-pill-badge {
+        font-size: 0.775rem;
+        color: var(--text-secondary);
+        background: #f1f5f9;
+        border: 1px solid var(--border);
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+    }
+
+    .btn-action {
+        background: transparent;
+        border: 1px solid var(--border);
+        padding: 0.35rem 0.7rem;
+        border-radius: 5px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        margin-left: 0.35rem;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.15s;
+    }
+
+    .btn-action.edit:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary-border);
+    }
+
+    .btn-action.delete:hover {
+        background: var(--danger-light);
+        color: var(--danger);
+        border-color: var(--danger-border);
+    }
+
+    .empty-state {
+        padding: 3rem;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .font-semibold {
+        font-weight: 600;
+    }
+</style>
+
+@section Scripts {
+<script>
+    function openCreateTermModal() {
+        document.getElementById("createTermModal").style.display = "flex";
+    }
+
+    function openDeleteOfferingModal(id, code) {
+        document.getElementById("deleteOfferingId").value = id;
+        document.getElementById("deleteOfferingCode").textContent = code;
+        document.getElementById("deleteOfferingModal").style.display = "flex";
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).style.display = "none";
+    }
+
+    window.onclick = function(event) {
+        if (event.target.classList.contains("modal-backdrop")) {
+            event.target.style.display = "none";
+        }
+    }
+</script>
+}
