@@ -70,6 +70,49 @@
                 <span class="form-help">Locks lab times for same-level courses.</span>
             </div>
         </div>
+
+        <!-- Schedule Optimization Preferences (Soft Constraints) -->
+        <div class="preferences-divider">
+            <span class="preferences-divider-label">Schedule Optimization Preferences</span>
+        </div>
+
+        <div class="form-row preferences-row">
+            <div class="form-col">
+                <label class="form-label" for="prefDaysSelect">
+                    Minimize Days on Campus
+                </label>
+                <select id="prefDaysSelect" class="form-select" onchange="onPrefDaysChange()">
+                    <option value="0">Off (No Preference)</option>
+                    <option value="2">Low (Prioritize Fewer Days)</option>
+                    <option value="5">High (Most Compact Schedule)</option>
+                </select>
+                <span class="form-help">Condenses classes into fewer days per week.</span>
+            </div>
+
+            <div class="form-col">
+                <label class="form-label" for="prefGapsSelect">
+                    Minimize Idle Gaps
+                </label>
+                <select id="prefGapsSelect" class="form-select" onchange="onPrefGapsChange()">
+                    <option value="0">Off (No Preference)</option>
+                    <option value="2">Low (Reduce Idle Breaks)</option>
+                    <option value="5">High (Back-to-Back Classes)</option>
+                </select>
+                <span class="form-help">Eliminates dead time between classes on the same day.</span>
+            </div>
+
+            <div class="form-col">
+                <label class="form-label" for="prefTimeBlockSelect">
+                    Preferred Time Block
+                </label>
+                <select id="prefTimeBlockSelect" class="form-select" onchange="onPrefTimeBlockChange()">
+                    <option value="None">Any Time (Flexible)</option>
+                    <option value="Morning">Morning (08:00 - 12:30)</option>
+                    <option value="Afternoon">Afternoon (12:30 - 17:30)</option>
+                </select>
+                <span class="form-help">Favors classes matching your daily study rhythm.</span>
+            </div>
+        </div>
     </section>
 
     <!-- Step 2: Course Selection -->
@@ -337,6 +380,63 @@
 
     .form-select:focus {
         border-color: var(--primary);
+    }
+
+    /* Schedule Preferences */
+    .preferences-divider {
+        display: flex;
+        align-items: center;
+        margin: 1.25rem 0 1rem 0;
+        border-top: 1px solid var(--border);
+        position: relative;
+    }
+
+    .preferences-divider-label {
+        font-size: 0.775rem;
+        font-weight: 700;
+        color: var(--primary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: var(--surface);
+        padding: 0 0.5rem;
+        margin-top: -0.65rem;
+        display: inline-block;
+    }
+
+    .preferences-row {
+        margin-top: 0.25rem;
+    }
+
+    .rank-badge {
+        display: inline-flex;
+        align-items: center;
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-weight: 700;
+        font-size: 0.8rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        margin-right: 0.4rem;
+    }
+
+    .rank-badge.best-match {
+        background: #fef3c7;
+        border-color: #f59e0b;
+        color: #b45309;
+    }
+
+    .score-pill {
+        display: inline-flex;
+        align-items: center;
+        background: #dbeafe;
+        border: 1px solid #93c5fd;
+        color: #1e40af;
+        font-weight: 700;
+        font-size: 0.8rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        margin-right: 0.45rem;
     }
 
     /* Step 2 Courses */
@@ -1262,6 +1362,10 @@
         browsingLevel: 1,
         primaryLectureGroupName: null,
         primaryLabSectionName: null,
+        minimizeDaysWeight: 0,
+        minimizeGapsWeight: 0,
+        preferredTimeBlock: "None",
+        preferredTimeBlockWeight: 0,
         selectedOfferings: new Set(),
         currentLevelOfferings: [],
         allLoadedOfferings: new Map(),
@@ -1408,6 +1512,22 @@
     function onLabSectionChange() {
         const val = document.getElementById("labSectionSelect").value;
         state.primaryLabSectionName = val ? val : null;
+    }
+
+    function onPrefDaysChange() {
+        const val = parseInt(document.getElementById("prefDaysSelect").value, 10);
+        state.minimizeDaysWeight = isNaN(val) ? 0 : val;
+    }
+
+    function onPrefGapsChange() {
+        const val = parseInt(document.getElementById("prefGapsSelect").value, 10);
+        state.minimizeGapsWeight = isNaN(val) ? 0 : val;
+    }
+
+    function onPrefTimeBlockChange() {
+        const val = document.getElementById("prefTimeBlockSelect").value;
+        state.preferredTimeBlock = val;
+        state.preferredTimeBlockWeight = val === "None" ? 0 : 3;
     }
 
     function renderCourseCards(offerings) {
@@ -1604,7 +1724,11 @@
             academicLevelNumber: state.primaryStandingLevel,
             primaryLectureGroupName: state.primaryLectureGroupName || null,
             primaryLabSectionName: state.primaryLabSectionName || null,
-            selectedCourseOfferingIds: Array.from(state.selectedOfferings)
+            selectedCourseOfferingIds: Array.from(state.selectedOfferings),
+            minimizeDaysWeight: state.minimizeDaysWeight,
+            minimizeGapsWeight: state.minimizeGapsWeight,
+            preferredTimeBlock: state.preferredTimeBlock,
+            preferredTimeBlockWeight: state.preferredTimeBlockWeight
         };
 
         const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || "";
@@ -1739,13 +1863,28 @@
         const statsLabel = document.getElementById("resultsStats");
         const printMeta = document.getElementById("printScheduleMeta");
 
-        pageIndicator.textContent = `Schedule ${state.currentScheduleIndex + 1} of ${schedules.length}`;
+        const rank = schedule.rank || (state.currentScheduleIndex + 1);
+        const score = schedule.overallScore != null ? schedule.overallScore : 100;
+        const breakdown = schedule.scoreBreakdown || {};
+        const daysText = breakdown.totalDays ? `${breakdown.totalDays} Days` : "";
+        const gapText = breakdown.totalGapHours != null ? `${breakdown.totalGapHours}h Gaps` : "";
+        const alignText = breakdown.timeBlockAlignmentPercentage != null && state.preferredTimeBlock !== "None" ? `${Math.round(breakdown.timeBlockAlignmentPercentage)}% Time Match` : "";
+
+        const metaParts = [daysText, gapText, alignText].filter(Boolean).join(", ");
+        const metaSuffix = metaParts ? ` • ${metaParts}` : "";
+
+        pageIndicator.textContent = `Option ${state.currentScheduleIndex + 1} of ${schedules.length}`;
         prevBtn.disabled = state.currentScheduleIndex === 0;
         nextBtn.disabled = state.currentScheduleIndex === schedules.length - 1;
-        statsLabel.textContent = `${schedule.selectedGroups.length} Scheduled Sections • Option ${state.currentScheduleIndex + 1}`;
+
+        statsLabel.innerHTML = `
+            <span class="rank-badge ${rank === 1 ? "best-match" : ""}">Rank #${rank}</span>
+            <span class="score-pill">${Math.round(score)}% Match</span>
+            <span class="text-secondary">${schedule.selectedGroups.length} Sections${metaSuffix}</span>
+        `;
 
         if (printMeta) {
-            printMeta.textContent = `Level ${state.primaryStandingLevel} • Option ${state.currentScheduleIndex + 1} of ${schedules.length} (${schedule.selectedGroups.length} Sections)`;
+            printMeta.textContent = `Level ${state.primaryStandingLevel} • Option ${state.currentScheduleIndex + 1} of ${schedules.length} (Rank #${rank} • ${Math.round(score)}% Match • ${schedule.selectedGroups.length} Sections)`;
         }
 
         const meetingsList = [];

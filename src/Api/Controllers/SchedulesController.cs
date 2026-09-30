@@ -34,6 +34,13 @@ public class SchedulesController : ControllerBase
             });
         }
 
+        var preferences = new SchedulePreferenceProfile(
+            MinimizeDaysWeight: request.MinimizeDaysWeight,
+            MinimizeGapsWeight: request.MinimizeGapsWeight,
+            PreferredTimeBlock: request.PreferredTimeBlock,
+            PreferredTimeBlockWeight: request.PreferredTimeBlockWeight
+        );
+
         var offeringIds = request.SelectedCourseOfferingIds?.Distinct().ToList() ?? [];
 
         if (offeringIds.Count == 0)
@@ -41,7 +48,8 @@ public class SchedulesController : ControllerBase
             var emptyResult = _solver.GenerateSchedules(new SchedulingInputSnapshot(
                 new StudentGroupConstraint(request.AcademicLevelNumber, request.PrimaryLectureGroupName, request.PrimaryLabSectionName),
                 [],
-                []
+                [],
+                preferences
             ));
             return Ok(MapToResponse(emptyResult));
         }
@@ -147,7 +155,8 @@ public class SchedulesController : ControllerBase
         var snapshot = new SchedulingInputSnapshot(
             studentConstraint: studentConstraint,
             selectedCourses: selectedCourses,
-            availableOptions: availableOptions
+            availableOptions: availableOptions,
+            preferences: preferences
         );
 
         var result = _solver.GenerateSchedules(snapshot);
@@ -167,6 +176,18 @@ public class SchedulesController : ControllerBase
             Schedules = result.ValidSchedules.Select(schedule => new ScheduleDto
             {
                 ScheduleId = schedule.ScheduleId,
+                Rank = schedule.Rank,
+                OverallScore = schedule.OverallScore,
+                ScoreBreakdown = new ScheduleScoreBreakdownDto
+                {
+                    TotalDays = schedule.ScoreBreakdown.TotalDays,
+                    TotalGapHours = schedule.ScoreBreakdown.TotalGapHours,
+                    TimeBlockAlignmentPercentage = schedule.ScoreBreakdown.TimeBlockAlignmentPercentage,
+                    DaysScore = schedule.ScoreBreakdown.DaysScore,
+                    GapsScore = schedule.ScoreBreakdown.GapsScore,
+                    TimeBlockScore = schedule.ScoreBreakdown.TimeBlockScore,
+                    OverallScore = schedule.ScoreBreakdown.OverallScore
+                },
                 SelectedGroups = schedule.SelectedGroups.Select(group => new SelectedGroupDto
                 {
                     GroupId = group.Id,

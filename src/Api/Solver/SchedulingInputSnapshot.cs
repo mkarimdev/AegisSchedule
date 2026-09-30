@@ -5,6 +5,8 @@ public sealed record SchedulingInputSnapshot
     public StudentGroupConstraint StudentConstraint { get; init; } = new();
     public StudentGroupConstraint StudentGroupConstraint => StudentConstraint;
 
+    public SchedulePreferenceProfile Preferences { get; init; } = new();
+
     public IReadOnlyList<SelectedCourseRequirement> SelectedCourses { get; init; } = [];
     public IReadOnlyList<SelectedCourseRequirement> CourseRequirements => SelectedCourses;
 
@@ -16,10 +18,12 @@ public sealed record SchedulingInputSnapshot
     public SchedulingInputSnapshot(
         StudentGroupConstraint studentConstraint,
         IReadOnlyList<SelectedCourseRequirement> selectedCourses,
-        IReadOnlyList<ActivityGroupOption> availableOptions)
+        IReadOnlyList<ActivityGroupOption> availableOptions,
+        SchedulePreferenceProfile? preferences = null)
     {
         StudentConstraint = studentConstraint;
         SelectedCourses = selectedCourses;
         AvailableOptions = availableOptions;
+        Preferences = preferences ?? new();
     }
 }

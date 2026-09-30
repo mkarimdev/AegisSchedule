@@ -89,7 +89,9 @@ public class ScheduleSolver
 
         Backtrack(0, targets, currentSelected, currentMeetings, validSchedules, ref combinationsEvaluated);
 
-        return SchedulingResult.Success(validSchedules, combinationsEvaluated);
+        var rankedSchedules = ScheduleRankingEngine.RankAndSort(validSchedules, snapshot.Preferences);
+
+        return SchedulingResult.Success(rankedSchedules, combinationsEvaluated);
     }
 
     public static SchedulingResult Solve(SchedulingInputSnapshot snapshot) =>

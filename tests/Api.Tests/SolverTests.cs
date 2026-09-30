@@ -1,4 +1,5 @@
 using Api.Domain;
+using Api.DTOs;
 using Api.Solver;
 
 namespace Api.Tests;
@@ -427,4 +428,192 @@ public class SolverTests
         Assert.Contains(result.ValidSchedules, s => s.SelectedGroups.Any(g => g.Id == lab1.Id));
         Assert.Contains(result.ValidSchedules, s => s.SelectedGroups.Any(g => g.Id == lab2.Id));
     }
+
+    [Fact]
+    public void RankSchedules_MinimizeDays_PrioritizesScheduleWithFewerDays()
+    {
+        // Arrange
+        var csId = Guid.NewGuid();
+        var mathId = Guid.NewGuid();
+
+        var csCourse = new SelectedCourseRequirement(csId, "CS101", [new ActivityRequirement(ActivityType.Lecture)], 1);
+        var mathCourse = new SelectedCourseRequirement(mathId, "MATH101", [new ActivityRequirement(ActivityType.Lecture)], 1);
+
+        // CS101 on Sunday
+        var csLec = new ActivityGroupOption(
+            Guid.NewGuid(), "CS101-L1",
+            [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }],
+            ActivityType.Lecture, csId, "CS101", 1);
+
+        // MATH101 Option A on Sunday (1 total day: Sunday)
+        var mathLecA = new ActivityGroupOption(
+            Guid.NewGuid(), "MATH101-LA",
+            [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(11, 0), EndTime = new TimeOnly(13, 0) }],
+            ActivityType.Lecture, mathId, "MATH101", 1);
+
+        // MATH101 Option B on Monday (2 total days: Sunday, Monday)
+        var mathLecB = new ActivityGroupOption(
+            Guid.NewGuid(), "MATH101-LB",
+            [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(11, 0), EndTime = new TimeOnly(13, 0) }],
+            ActivityType.Lecture, mathId, "MATH101", 1);
+
+        var preferences = new SchedulePreferenceProfile(
+            MinimizeDaysWeight: 5,
+            MinimizeGapsWeight: 0,
+            PreferredTimeBlock: TimeBlockPreference.None,
+            PreferredTimeBlockWeight: 0);
+
+        var snapshot = new SchedulingInputSnapshot(
+            studentConstraint: new StudentGroupConstraint(academicLevelNumber: 1),
+            selectedCourses: [csCourse, mathCourse],
+            availableOptions: [csLec, mathLecA, mathLecB],
+            preferences: preferences
+        );
+
+        var solver = new ScheduleSolver();
+
+        // Act
+        var result = solver.GenerateSchedules(snapshot);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.ValidSchedules.Count);
+
+        var rank1 = result.ValidSchedules[0];
+        var rank2 = result.ValidSchedules[1];
+
+        Assert.Equal(1, rank1.Rank);
+        Assert.Equal(2, rank2.Rank);
+
+        // Option A (1 day) must score higher and be rank #1
+        Assert.Equal(1, rank1.ScoreBreakdown.TotalDays);
+        Assert.Equal(2, rank2.ScoreBreakdown.TotalDays);
+        Assert.True(rank1.ScoreBreakdown.DaysScore > rank2.ScoreBreakdown.DaysScore);
+        Assert.True(rank1.OverallScore > rank2.OverallScore);
+        Assert.Contains(rank1.SelectedGroups, g => g.Id == mathLecA.Id);
+        Assert.Contains(rank2.SelectedGroups, g => g.Id == mathLecB.Id);
+    }
+
+    [Fact]
+    public void RankSchedules_MinimizeGaps_PrioritizesZeroGapOverTwoHourGap()
+    {
+        // Arrange
+        var csId = Guid.NewGuid();
+        var mathId = Guid.NewGuid();
+
+        var csCourse = new SelectedCourseRequirement(csId, "CS101", [new ActivityRequirement(ActivityType.Lecture)], 1);
+        var mathCourse = new SelectedCourseRequirement(mathId, "MATH101", [new ActivityRequirement(ActivityType.Lecture)], 1);
+
+        // CS101 on Sunday 09:00 - 11:00
+        var csLec = new ActivityGroupOption(
+            Guid.NewGuid(), "CS101-L1",
+            [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(11, 0) }],
+            ActivityType.Lecture, csId, "CS101", 1);
+
+        // Option A: Sunday 11:00 - 13:00 (Gap = 0 hours)
+        var mathLecNoGap = new ActivityGroupOption(
+            Guid.NewGuid(), "MATH101-L1",
+            [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(11, 0), EndTime = new TimeOnly(13, 0) }],
+            ActivityType.Lecture, mathId, "MATH101", 1);
+
+        // Option B: Sunday 13:00 - 15:00 (Gap = 2 hours between 11:00 and 13:00)
+        var mathLecWithGap = new ActivityGroupOption(
+            Guid.NewGuid(), "MATH101-L2",
+            [new Meeting { DayOfWeek = DayOfWeek.Sunday, StartTime = new TimeOnly(13, 0), EndTime = new TimeOnly(15, 0) }],
+            ActivityType.Lecture, mathId, "MATH101", 1);
+
+        var preferences = new SchedulePreferenceProfile(
+            MinimizeDaysWeight: 0,
+            MinimizeGapsWeight: 5,
+            PreferredTimeBlock: TimeBlockPreference.None,
+            PreferredTimeBlockWeight: 0);
+
+        var snapshot = new SchedulingInputSnapshot(
+            studentConstraint: new StudentGroupConstraint(academicLevelNumber: 1),
+            selectedCourses: [csCourse, mathCourse],
+            availableOptions: [csLec, mathLecNoGap, mathLecWithGap],
+            preferences: preferences
+        );
+
+        var solver = new ScheduleSolver();
+
+        // Act
+        var result = solver.GenerateSchedules(snapshot);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.ValidSchedules.Count);
+
+        var rank1 = result.ValidSchedules[0];
+        var rank2 = result.ValidSchedules[1];
+
+        Assert.Equal(1, rank1.Rank);
+        Assert.Equal(2, rank2.Rank);
+
+        // Option A (0 gap hours) must score higher and be rank #1
+        Assert.Equal(0.0, rank1.ScoreBreakdown.TotalGapHours);
+        Assert.Equal(2.0, rank2.ScoreBreakdown.TotalGapHours);
+        Assert.True(rank1.ScoreBreakdown.GapsScore > rank2.ScoreBreakdown.GapsScore);
+        Assert.True(rank1.OverallScore > rank2.OverallScore);
+        Assert.Contains(rank1.SelectedGroups, g => g.Id == mathLecNoGap.Id);
+        Assert.Contains(rank2.SelectedGroups, g => g.Id == mathLecWithGap.Id);
+    }
+
+    [Fact]
+    public void RankSchedules_TimeBlockPreference_PrioritizesMorningClasses()
+    {
+        // Arrange
+        var csId = Guid.NewGuid();
+
+        var csCourse = new SelectedCourseRequirement(csId, "CS101", [new ActivityRequirement(ActivityType.Lecture)], 1);
+
+        // Option A: Morning meeting 08:30 - 10:30 (Morning window: 08:00 - 12:30 -> 100% overlap)
+        var morningLec = new ActivityGroupOption(
+            Guid.NewGuid(), "CS101-Morning",
+            [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(8, 30), EndTime = new TimeOnly(10, 30) }],
+            ActivityType.Lecture, csId, "CS101", 1);
+
+        // Option B: Afternoon meeting 13:00 - 15:00 (Morning window -> 0% overlap)
+        var afternoonLec = new ActivityGroupOption(
+            Guid.NewGuid(), "CS101-Afternoon",
+            [new Meeting { DayOfWeek = DayOfWeek.Monday, StartTime = new TimeOnly(13, 0), EndTime = new TimeOnly(15, 0) }],
+            ActivityType.Lecture, csId, "CS101", 1);
+
+        var preferences = new SchedulePreferenceProfile(
+            MinimizeDaysWeight: 0,
+            MinimizeGapsWeight: 0,
+            PreferredTimeBlock: TimeBlockPreference.Morning,
+            PreferredTimeBlockWeight: 5);
+
+        var snapshot = new SchedulingInputSnapshot(
+            studentConstraint: new StudentGroupConstraint(academicLevelNumber: 1),
+            selectedCourses: [csCourse],
+            availableOptions: [morningLec, afternoonLec],
+            preferences: preferences
+        );
+
+        var solver = new ScheduleSolver();
+
+        // Act
+        var result = solver.GenerateSchedules(snapshot);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.ValidSchedules.Count);
+
+        var rank1 = result.ValidSchedules[0];
+        var rank2 = result.ValidSchedules[1];
+
+        Assert.Equal(1, rank1.Rank);
+        Assert.Equal(2, rank2.Rank);
+
+        // Morning option must have 100% alignment and be ranked #1
+        Assert.Equal(100.0, rank1.ScoreBreakdown.TimeBlockAlignmentPercentage);
+        Assert.Equal(0.0, rank2.ScoreBreakdown.TimeBlockAlignmentPercentage);
+        Assert.True(rank1.ScoreBreakdown.TimeBlockScore > rank2.ScoreBreakdown.TimeBlockScore);
+        Assert.True(rank1.OverallScore > rank2.OverallScore);
+        Assert.Contains(rank1.SelectedGroups, g => g.Id == morningLec.Id);
+        Assert.Contains(rank2.SelectedGroups, g => g.Id == afternoonLec.Id);
+    }
 }
+
