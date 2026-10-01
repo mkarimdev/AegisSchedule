@@ -11,4 +11,5 @@ public sealed class GenerateScheduleRequest
     public int MinimizeGapsWeight { get; set; } = 0;
     public TimeBlockPreference PreferredTimeBlock { get; set; } = TimeBlockPreference.None;
     public int PreferredTimeBlockWeight { get; set; } = 0;
+    public bool IsCombinationsCapExceeded { get; set; }
 }

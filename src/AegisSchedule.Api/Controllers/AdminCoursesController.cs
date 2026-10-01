@@ -1,12 +1,14 @@
 using AegisSchedule.Api.Domain;
 using AegisSchedule.Api.DTOs;
 using AegisSchedule.Api.Persistence;
+using AegisSchedule.Api.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AegisSchedule.Api.Controllers;
 
 [ApiController]
+[ApiKeyAuth]
 [Route("api/admin/courses")]
 public class AdminCoursesController : ControllerBase
 {

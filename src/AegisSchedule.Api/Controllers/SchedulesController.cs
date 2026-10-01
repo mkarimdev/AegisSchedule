@@ -50,7 +50,7 @@ public class SchedulesController : ControllerBase
                 [],
                 [],
                 preferences
-            ));
+            ), cancellationToken);
             return Ok(MapToResponse(emptyResult));
         }
 
@@ -159,7 +159,7 @@ public class SchedulesController : ControllerBase
             preferences: preferences
         );
 
-        var result = _solver.GenerateSchedules(snapshot);
+        var result = _solver.GenerateSchedules(snapshot, cancellationToken);
 
         // f) Map SchedulingResult into GenerateScheduleResponse and return Ok(response)
         var response = MapToResponse(result);
@@ -172,6 +172,7 @@ public class SchedulesController : ControllerBase
         {
             IsSuccess = result.IsSuccess,
             TotalCombinationsEvaluated = result.TotalCombinationsEvaluated,
+            IsCombinationsCapExceeded = result.IsCombinationsCapExceeded,
             ErrorMessage = result.ErrorMessage,
             Schedules = result.ValidSchedules.Select(schedule => new ScheduleDto
             {

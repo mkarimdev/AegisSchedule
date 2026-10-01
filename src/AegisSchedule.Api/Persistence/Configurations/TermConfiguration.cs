@@ -21,5 +21,8 @@ public class TermConfiguration : IEntityTypeConfiguration<Term>
 
         builder.Property(t => t.IsCurrent)
             .IsRequired();
+
+        builder.HasIndex(t => new { t.Semester, t.Year })
+            .IsUnique();
     }
 }

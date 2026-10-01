@@ -20,5 +20,8 @@ public class ActivityGroupConfiguration : IEntityTypeConfiguration<ActivityGroup
             .WithMany()
             .HasForeignKey(ag => ag.ActivityId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(ag => new { ag.ActivityId, ag.Name })
+            .IsUnique();
     }
 }

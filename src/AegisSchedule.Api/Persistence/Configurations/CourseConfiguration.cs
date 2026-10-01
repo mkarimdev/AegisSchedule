@@ -20,6 +20,9 @@ public class CourseConfiguration : IEntityTypeConfiguration<Course>
             .HasMaxLength(200)
             .IsRequired();
 
+        builder.HasIndex(c => new { c.UniversityId, c.Code })
+            .IsUnique();
+
         builder.HasOne<University>()
             .WithMany()
             .HasForeignKey(c => c.UniversityId)

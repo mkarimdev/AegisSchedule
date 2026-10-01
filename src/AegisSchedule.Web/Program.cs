@@ -10,6 +10,7 @@ builder.Services.AddAntiforgery(options =>
 });
 
 var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5221";
+var adminApiKey = builder.Configuration["ApiSettings:AdminApiKey"] ?? "AegisAdmin_SuperSecretKey_2026_ChangeMeInProd";
 
 builder.Services.AddHttpClient<ISchedulingApiClient, SchedulingApiClient>(client =>
 {
@@ -21,6 +22,10 @@ builder.Services.AddHttpClient<IAdminApiClient, AdminApiClient>(client =>
 {
     client.BaseAddress = new Uri(apiBaseUrl.TrimEnd('/') + "/");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
+    if (!string.IsNullOrWhiteSpace(adminApiKey))
+    {
+        client.DefaultRequestHeaders.Add("X-Admin-Api-Key", adminApiKey);
+    }
 });
 
 var app = builder.Build();

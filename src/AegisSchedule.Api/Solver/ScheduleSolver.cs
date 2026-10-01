@@ -1,9 +1,23 @@
+using System.Diagnostics;
 using AegisSchedule.Api.Domain;
+using Microsoft.Extensions.Options;
 
 namespace AegisSchedule.Api.Solver;
 
 public class ScheduleSolver
 {
+    private readonly SolverOptions _options;
+
+    public ScheduleSolver(IOptions<SolverOptions>? options = null)
+    {
+        _options = options?.Value ?? new SolverOptions();
+    }
+
+    public ScheduleSolver(SolverOptions options)
+    {
+        _options = options ?? new SolverOptions();
+    }
+
     private sealed record TargetRequirement(
         SelectedCourseRequirement Course,
         ActivityType ActivityType,
@@ -11,7 +25,7 @@ public class ScheduleSolver
         IReadOnlyList<ActivityGroupOption> Candidates
     );
 
-    public SchedulingResult GenerateSchedules(SchedulingInputSnapshot snapshot)
+    public SchedulingResult GenerateSchedules(SchedulingInputSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         if (snapshot == null)
         {
@@ -84,18 +98,30 @@ public class ScheduleSolver
 
         var validSchedules = new List<GeneratedSchedule>();
         int combinationsEvaluated = 0;
+        bool capExceeded = false;
         var currentSelected = new List<ActivityGroupOption>();
         var currentMeetings = new List<Meeting>();
+        var stopwatch = Stopwatch.StartNew();
 
-        Backtrack(0, targets, currentSelected, currentMeetings, validSchedules, ref combinationsEvaluated);
+        Backtrack(
+            0,
+            targets,
+            currentSelected,
+            currentMeetings,
+            validSchedules,
+            ref combinationsEvaluated,
+            ref capExceeded,
+            stopwatch,
+            _options,
+            cancellationToken);
 
         var rankedSchedules = ScheduleRankingEngine.RankAndSort(validSchedules, snapshot.Preferences);
 
-        return SchedulingResult.Success(rankedSchedules, combinationsEvaluated);
+        return SchedulingResult.Success(rankedSchedules, combinationsEvaluated, capExceeded);
     }
 
-    public static SchedulingResult Solve(SchedulingInputSnapshot snapshot) =>
-        new ScheduleSolver().GenerateSchedules(snapshot);
+    public static SchedulingResult Solve(SchedulingInputSnapshot snapshot, CancellationToken cancellationToken = default) =>
+        new ScheduleSolver().GenerateSchedules(snapshot, cancellationToken);
 
     private static List<ActivityGroupOption> FindCandidates(
         IReadOnlyList<ActivityGroupOption> allOptions,
@@ -222,8 +248,24 @@ public class ScheduleSolver
         List<ActivityGroupOption> currentSelected,
         List<Meeting> currentMeetings,
         List<GeneratedSchedule> validSchedules,
-        ref int combinationsEvaluated)
+        ref int combinationsEvaluated,
+        ref bool capExceeded,
+        Stopwatch stopwatch,
+        SolverOptions options,
+        CancellationToken cancellationToken)
     {
+        if (capExceeded || cancellationToken.IsCancellationRequested)
+        {
+            capExceeded = true;
+            return;
+        }
+
+        if (combinationsEvaluated >= options.MaxCombinations || stopwatch.ElapsedMilliseconds >= options.TimeoutMilliseconds)
+        {
+            capExceeded = true;
+            return;
+        }
+
         if (targetIndex == targets.Count)
         {
             combinationsEvaluated++;
@@ -235,6 +277,18 @@ public class ScheduleSolver
 
         foreach (var candidate in target.Candidates)
         {
+            if (capExceeded || cancellationToken.IsCancellationRequested)
+            {
+                capExceeded = true;
+                return;
+            }
+
+            if (combinationsEvaluated >= options.MaxCombinations || stopwatch.ElapsedMilliseconds >= options.TimeoutMilliseconds)
+            {
+                capExceeded = true;
+                return;
+            }
+
             bool hasConflict = false;
 
             // Internal group meeting overlap check
@@ -278,7 +332,17 @@ public class ScheduleSolver
             currentSelected.Add(candidate);
             currentMeetings.AddRange(candidate.Meetings);
 
-            Backtrack(targetIndex + 1, targets, currentSelected, currentMeetings, validSchedules, ref combinationsEvaluated);
+            Backtrack(
+                targetIndex + 1,
+                targets,
+                currentSelected,
+                currentMeetings,
+                validSchedules,
+                ref combinationsEvaluated,
+                ref capExceeded,
+                stopwatch,
+                options,
+                cancellationToken);
 
             // Backtrack undo
             currentSelected.RemoveAt(currentSelected.Count - 1);

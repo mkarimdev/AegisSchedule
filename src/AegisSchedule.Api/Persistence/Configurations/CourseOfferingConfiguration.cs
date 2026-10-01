@@ -12,6 +12,9 @@ public class CourseOfferingConfiguration : IEntityTypeConfiguration<CourseOfferi
 
         builder.HasKey(co => co.Id);
 
+        builder.HasIndex(co => new { co.CourseId, co.TermId })
+            .IsUnique();
+
         builder.HasOne<Course>()
             .WithMany()
             .HasForeignKey(co => co.CourseId)
