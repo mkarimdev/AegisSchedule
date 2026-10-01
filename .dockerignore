@@ -1,0 +1,31 @@
+## ── Build Artifacts ──────────────────────────────────────────────────────────
+**/bin/
+**/obj/
+**/publish/
+**/out/
+
+## ── Source Control ───────────────────────────────────────────────────────────
+**/.git/
+**/.gitignore
+**/.gitattributes
+
+## ── IDE / Editor Metadata ────────────────────────────────────────────────────
+**/.vs/
+**/.vscode/
+**/.idea/
+**/*.user
+**/*.suo
+**/*.sln.DotSettings.user
+
+## ── OS Noise ─────────────────────────────────────────────────────────────────
+**/.DS_Store
+**/Thumbs.db
+
+## ── Docs & Non-Runtime Assets ────────────────────────────────────────────────
+docs/
+*.md
+LICENSE
+CONTRIBUTING.md
+
+## ── GitHub Actions ───────────────────────────────────────────────────────────
+.github/

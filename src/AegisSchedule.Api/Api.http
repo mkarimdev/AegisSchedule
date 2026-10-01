@@ -1,6 +1,388 @@
-@Api_HostAddress = http://localhost:5221
+# AegisSchedule REST API Test Collection
+# Compatible with: VS Code REST Client, JetBrains HTTP Client
+#
+# Usage:
+#   1. Update @adminKey if changed in appsettings.json / docker-compose.yml
+#   2. Run requests top-to-bottom; copy returned GUIDs into the variable section below.
+#   3. Use ### to separate requests in VS Code REST Client.
 
-GET {{Api_HostAddress}}/weatherforecast/
+# ─── Global Variables ─────────────────────────────────────────────────────────
+@baseUrl    = http://localhost:5221
+@adminKey   = AegisAdmin_SuperSecretKey_2026_ChangeMeInProd
+
+# Replace these with real GUIDs from the responses below once seeded
+@termId         = 00000000-0000-0000-0000-000000000000
+@levelId        = 00000000-0000-0000-0000-000000000000
+@courseId       = 00000000-0000-0000-0000-000000000000
+@offeringId     = 00000000-0000-0000-0000-000000000000
+@activityId     = 00000000-0000-0000-0000-000000000000
+@groupId        = 00000000-0000-0000-0000-000000000000
+@meetingId      = 00000000-0000-0000-0000-000000000000
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PUBLIC CATALOG ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+###
+# 1. Get all academic levels
+GET {{baseUrl}}/api/catalog/levels
 Accept: application/json
 
 ###
+# 2. Get course offerings (all)
+GET {{baseUrl}}/api/catalog/offerings
+Accept: application/json
+
+###
+# 3. Get course offerings — filtered by academic level
+GET {{baseUrl}}/api/catalog/offerings?academicLevel=2
+Accept: application/json
+
+###
+# 4. Get course offerings — filtered by academic level + term
+GET {{baseUrl}}/api/catalog/offerings?academicLevel=2&termId={{termId}}
+Accept: application/json
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCHEDULE GENERATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+###
+# 5. Generate schedules — basic (no soft preferences)
+POST {{baseUrl}}/api/schedules/generate
+Content-Type: application/json
+Accept: application/json
+
+{
+  "academicLevelNumber": 2,
+  "primaryLectureGroupName": "G1",
+  "primaryLabSectionName": "L1",
+  "selectedCourseOfferingIds": [
+    "{{offeringId}}"
+  ],
+  "minimizeDaysWeight": 0,
+  "minimizeGapsWeight": 0,
+  "preferredTimeBlock": "None",
+  "preferredTimeBlockWeight": 0
+}
+
+###
+# 6. Generate schedules — prefer morning + minimize gaps
+POST {{baseUrl}}/api/schedules/generate
+Content-Type: application/json
+Accept: application/json
+
+{
+  "academicLevelNumber": 2,
+  "primaryLectureGroupName": "G1",
+  "primaryLabSectionName": "L1",
+  "selectedCourseOfferingIds": [
+    "{{offeringId}}"
+  ],
+  "minimizeDaysWeight": 3,
+  "minimizeGapsWeight": 5,
+  "preferredTimeBlock": "Morning",
+  "preferredTimeBlockWeight": 4
+}
+
+###
+# 7. Generate schedules — prefer evening + minimize active days
+POST {{baseUrl}}/api/schedules/generate
+Content-Type: application/json
+Accept: application/json
+
+{
+  "academicLevelNumber": 3,
+  "primaryLectureGroupName": "G2",
+  "primaryLabSectionName": null,
+  "selectedCourseOfferingIds": [
+    "{{offeringId}}"
+  ],
+  "minimizeDaysWeight": 8,
+  "minimizeGapsWeight": 2,
+  "preferredTimeBlock": "Evening",
+  "preferredTimeBlockWeight": 6
+}
+
+###
+# 8. Generate schedules — empty selection (returns empty result, not 400)
+POST {{baseUrl}}/api/schedules/generate
+Content-Type: application/json
+Accept: application/json
+
+{
+  "academicLevelNumber": 1,
+  "primaryLectureGroupName": null,
+  "primaryLabSectionName": null,
+  "selectedCourseOfferingIds": []
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADMIN — SECURITY VALIDATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+###
+# 9. GET /api/admin/terms — no key → 401 Unauthorized
+GET {{baseUrl}}/api/admin/terms
+Accept: application/json
+
+###
+# 10. GET /api/admin/terms — wrong key → 401 Unauthorized
+GET {{baseUrl}}/api/admin/terms
+Accept: application/json
+X-Admin-Api-Key: totally-wrong-key
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADMIN — TERMS
+# ══════════════════════════════════════════════════════════════════════════════
+
+###
+# 11. List all terms
+GET {{baseUrl}}/api/admin/terms
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 12. Create a new term (Spring 2027)
+POST {{baseUrl}}/api/admin/terms
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "semester": "Spring",
+  "year": 2027,
+  "isCurrent": false
+}
+
+###
+# 13. Set a term as current
+PUT {{baseUrl}}/api/admin/terms/{{termId}}/set-current
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADMIN — COURSES
+# ══════════════════════════════════════════════════════════════════════════════
+
+###
+# 14. List all courses
+GET {{baseUrl}}/api/admin/courses
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 15. List courses — filtered by academic level
+GET {{baseUrl}}/api/admin/courses?academicLevel=2
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 16. List courses — search by code or name
+GET {{baseUrl}}/api/admin/courses?search=cs
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 17. Get course by ID
+GET {{baseUrl}}/api/admin/courses/{{courseId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 18. Create a new course
+POST {{baseUrl}}/api/admin/courses
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "academicLevelId": "{{levelId}}",
+  "code": "CS301",
+  "name": "Data Structures and Algorithms"
+}
+
+###
+# 19. Update course
+PUT {{baseUrl}}/api/admin/courses/{{courseId}}
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "academicLevelId": "{{levelId}}",
+  "code": "CS301",
+  "name": "Data Structures and Algorithms (Updated)"
+}
+
+###
+# 20. Delete course
+DELETE {{baseUrl}}/api/admin/courses/{{courseId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADMIN — OFFERINGS
+# ══════════════════════════════════════════════════════════════════════════════
+
+###
+# 21. List all offerings (admin view)
+GET {{baseUrl}}/api/admin/offerings
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 22. List offerings — filtered by term
+GET {{baseUrl}}/api/admin/offerings?termId={{termId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 23. Get offering detail (full activity/group/meeting tree)
+GET {{baseUrl}}/api/admin/offerings/{{offeringId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 24. Create a new offering
+POST {{baseUrl}}/api/admin/offerings
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "courseId": "{{courseId}}",
+  "termId": "{{termId}}"
+}
+
+###
+# 25. Delete offering
+DELETE {{baseUrl}}/api/admin/offerings/{{offeringId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADMIN — SCHEDULE SLOTS (Activities → Groups → Meetings)
+# ══════════════════════════════════════════════════════════════════════════════
+
+###
+# 26. Add a Lecture activity to an offering
+POST {{baseUrl}}/api/admin/offerings/{{offeringId}}/activities
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "type": "Lecture"
+}
+
+###
+# 27. Add a Lab activity to an offering
+POST {{baseUrl}}/api/admin/offerings/{{offeringId}}/activities
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "type": "Lab"
+}
+
+###
+# 28. Delete an activity
+DELETE {{baseUrl}}/api/admin/activities/{{activityId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 29. Add group G1 to a Lecture activity
+POST {{baseUrl}}/api/admin/activities/{{activityId}}/groups
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "name": "G1"
+}
+
+###
+# 30. Add group G2 to a Lecture activity
+POST {{baseUrl}}/api/admin/activities/{{activityId}}/groups
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "name": "G2"
+}
+
+###
+# 31. Rename a group
+PUT {{baseUrl}}/api/admin/groups/{{groupId}}
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "name": "G1-Renamed"
+}
+
+###
+# 32. Delete a group
+DELETE {{baseUrl}}/api/admin/groups/{{groupId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+###
+# 33. Add a meeting — Sunday 09:00–11:00
+POST {{baseUrl}}/api/admin/groups/{{groupId}}/meetings
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "dayOfWeek": "Sunday",
+  "startTime": "09:00:00",
+  "endTime":   "11:00:00",
+  "room": "Hall A"
+}
+
+###
+# 34. Add a meeting — Tuesday 13:00–15:00
+POST {{baseUrl}}/api/admin/groups/{{groupId}}/meetings
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "dayOfWeek": "Tuesday",
+  "startTime": "13:00:00",
+  "endTime":   "15:00:00",
+  "room": "Lab 2"
+}
+
+###
+# 35. Update a meeting
+PUT {{baseUrl}}/api/admin/meetings/{{meetingId}}
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "dayOfWeek": "Monday",
+  "startTime": "10:00:00",
+  "endTime":   "12:00:00",
+  "room": "Lecture Hall B"
+}
+
+###
+# 36. Delete a meeting
+DELETE {{baseUrl}}/api/admin/meetings/{{meetingId}}
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}

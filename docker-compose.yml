@@ -1,0 +1,103 @@
+# AegisSchedule — Docker Compose Orchestration
+#
+# Three-service stack: PostgreSQL 17 → AegisSchedule.Api → AegisSchedule.Web
+#
+# Quick start:
+#   docker compose up -d --build
+#
+# Access:
+#   Web UI          →  http://localhost:5046
+#   API (Scalar)    →  http://localhost:5221/scalar/v1
+#   API (base)      →  http://localhost:5221/api
+
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL 17 — Primary relational store
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: aegisschedule-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       AegisScheduleDb
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: aegis_dev_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - aegis-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d AegisScheduleDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - aegis-net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # AegisSchedule.Api — RESTful scheduling API + EF Core auto-migration on boot
+  # ─────────────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: src/AegisSchedule.Api/Dockerfile
+    image: aegisschedule-api:latest
+    container_name: aegisschedule-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT:             Development
+      ASPNETCORE_HTTP_PORTS:              "8080"
+      # EF Core / Npgsql connection — references postgres service name via aegis-net DNS
+      ConnectionStrings__DefaultConnection: >-
+        Host=postgres;Port=5432;Database=AegisScheduleDb;
+        Username=postgres;Password=aegis_dev_password_2026
+      # Admin API key — override via .env file or secret in production
+      Security__AdminApiKey:              AegisAdmin_SuperSecretKey_2026_ChangeMeInProd
+      # CORS — allow requests from the Web container exposed on host port 5046
+      Cors__AllowedOrigins__0:            "http://localhost:5046"
+      Cors__AllowedOrigins__1:            "http://127.0.0.1:5046"
+      # Solver limits
+      Solver__MaxCombinations:            "50000"
+      Solver__TimeoutMilliseconds:        "5000"
+    ports:
+      - "5221:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # AegisSchedule.Web — Razor Pages server-side proxy (browser → Web → API)
+  # ─────────────────────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: src/AegisSchedule.Web/Dockerfile
+    image: aegisschedule-web:latest
+    container_name: aegisschedule-web
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT:     Development
+      ASPNETCORE_HTTP_PORTS:      "8080"
+      # Internal service-to-service URL (container DNS, not the host port)
+      ApiSettings__BaseUrl:       "http://api:8080"
+      ApiSettings__AdminApiKey:   AegisAdmin_SuperSecretKey_2026_ChangeMeInProd
+    ports:
+      - "5046:8080"
+    depends_on:
+      - api
+    networks:
+      - aegis-net
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared resources
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  aegis-postgres-data:
+
+networks:
+  aegis-net:
+    driver: bridge

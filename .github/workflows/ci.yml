@@ -1,0 +1,84 @@
+name: AegisSchedule CI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggers: every push / PR to main, plus manual dispatch
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# Cancel any in-progress run for the same branch/PR to save runner minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Verify (.NET 10)
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Source ────────────────────────────────────────────────────────────
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ── 2. SDK ──────────────────────────────────────────────────────────────
+      - name: Setup .NET SDK 10.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # ── 3. NuGet Cache ───────────────────────────────────────────────────────
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # ── 4. Restore ───────────────────────────────────────────────────────────
+      - name: Restore Dependencies
+        run: dotnet restore AegisSchedule.sln
+
+      # ── 5. Build ─────────────────────────────────────────────────────────────
+      - name: Build Solution (Release)
+        run: dotnet build AegisSchedule.sln -c Release --no-restore
+
+      # ── 6. Test ──────────────────────────────────────────────────────────────
+      - name: Run Test Suite
+        run: >
+          dotnet test AegisSchedule.sln
+          -c Release
+          --no-build
+          --verbosity normal
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFileName=test-results.trx"
+
+      # ── 7. Publish Test Results ──────────────────────────────────────────────
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: '**/TestResults/**'
+          retention-days: 14
+
+      # ── 8. Verify API Publish Output ─────────────────────────────────────────
+      - name: Verify API Publish
+        run: >
+          dotnet publish src/AegisSchedule.Api/AegisSchedule.Api.csproj
+          -c Release
+          --no-build
+          -o ./artifacts/api
+
+      # ── 9. Verify Web Publish Output ─────────────────────────────────────────
+      - name: Verify Web Publish
+        run: >
+          dotnet publish src/AegisSchedule.Web/AegisSchedule.Web.csproj
+          -c Release
+          --no-build
+          -o ./artifacts/web
