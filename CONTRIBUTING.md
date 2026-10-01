@@ -98,7 +98,7 @@ Branches must be cut from `main`. Do **not** commit directly to `main`.
 ## Coding Standards & Rules
 
 ### General
-- Target **.NET 10** and **C# 13** language features.
+- Target **.NET 10** and **C# 14** language features.
 - Enable **nullable reference types** — all code must be nullable-clean (`#nullable enable`).
 - Use **implicit usings** (`<ImplicitUsings>enable</ImplicitUsings>`) — no redundant `using System;` statements.
 - Prefer `record` and `record struct` for immutable data contracts (DTOs, solver snapshots).

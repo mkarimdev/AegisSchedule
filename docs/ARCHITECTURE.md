@@ -69,7 +69,7 @@ Strict **unidirectional** dependencies are enforced:
 | Layer | Technology | Version |
 |-------|-----------|---------|
 | Runtime | .NET | 10.0 |
-| Language | C# | 13 |
+| Language | C# | 14 |
 | Web API | ASP.NET Core Web API | 10.0 |
 | API Explorer | Scalar | 2.x |
 | ORM | Entity Framework Core | 10.0 |

@@ -6,9 +6,9 @@
 
 [![CI](https://github.com/mkarimdev/AegisSchedule/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mkarimdev/AegisSchedule/actions/workflows/ci.yml)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/en-us/)
-[![C#](https://img.shields.io/badge/C%23-13-239120?logo=csharp&logoColor=white)](https://learn.microsoft.com/en-us/dotnet/csharp/)
+[![C#](https://img.shields.io/badge/C%23-14-239120?logo=csharp&logoColor=white)](https://learn.microsoft.com/en-us/dotnet/csharp/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Scalar API](https://img.shields.io/badge/API%20Docs-Scalar-0A84FF)](http://localhost:5221/scalar/v1)
+[![API Docs](https://img.shields.io/badge/API_Docs-Scalar-0A84FF?style=flat-square)](http://localhost:5221/scalar/v1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22C55E)](LICENSE)
 
 </div>
@@ -281,7 +281,7 @@ AegisSchedule/                 ← repository root
 
 | Layer | Technology |
 |-------|-----------|
-| Runtime | .NET 10 / C# 13 |
+| Runtime | .NET 10 / C# 14 |
 | Web API | ASP.NET Core |
 | API Explorer | Scalar + OpenAPI 3.1 |
 | ORM | Entity Framework Core 10 |
