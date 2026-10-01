@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using AegisSchedule.Api.Integrations;
 using AegisSchedule.Api.Persistence;
 using AegisSchedule.Api.Security;
 using AegisSchedule.Api.Solver;
@@ -15,6 +16,7 @@ builder.Services.AddDbContext<UniSchedulingDbContext>(options =>
 
 builder.Services.Configure<SolverOptions>(builder.Configuration.GetSection(SolverOptions.SectionName));
 builder.Services.AddScoped<ApiKeyAuthFilter>();
+builder.Services.AddScoped<ISisImportService, SisImportService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>

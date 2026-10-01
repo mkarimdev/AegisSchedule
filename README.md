@@ -113,7 +113,7 @@ dotnet run --project src/AegisSchedule.Api
 dotnet run --project src/AegisSchedule.Web
 # → http://localhost:5046
 
-# Run all 48 tests
+# Run all 58 tests
 dotnet test AegisSchedule.sln
 ```
 
@@ -237,6 +237,7 @@ Content-Type: application/json
 | **Activities** | `POST /api/admin/offerings/{id}/activities` · `DELETE /api/admin/activities/{id}` |
 | **Groups** | `POST /api/admin/activities/{id}/groups` · `PUT`, `DELETE /api/admin/groups/{id}` |
 | **Meetings** | `POST /api/admin/groups/{id}/meetings` · `PUT`, `DELETE /api/admin/meetings/{id}` |
+| **SIS Bulk Sync** | `POST /api/admin/sis/sync` (single-pass transactional catalog batch ingestion) |
 
 ---
 
@@ -246,7 +247,7 @@ Content-Type: application/json
 AegisSchedule/                 ← repository root
 ├── .github/
 │   └── workflows/
-│       └── ci.yml             # GitHub Actions CI — build + 48 tests
+│       └── ci.yml             # GitHub Actions CI — build + 58 tests
 ├── docs/
 │   ├── ARCHITECTURE.md        # Architecture reference
 │   └── SIS_INTEGRATION_GUIDE.md  # Stage 2 SIS/ERP integration guide
@@ -266,7 +267,7 @@ AegisSchedule/                 ← repository root
 │       ├── Services/          # Typed HTTP clients for the API
 │       └── Dockerfile
 ├── tests/
-│   └── AegisSchedule.Tests/   # xUnit — 48 test cases
+│   └── AegisSchedule.Tests/   # xUnit — 58 test cases
 ├── .dockerignore
 ├── AegisSchedule.sln
 ├── CONTRIBUTING.md
@@ -297,7 +298,7 @@ AegisSchedule/                 ← repository root
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, coding rules, and PR guidelines.
 
-All 48 tests must pass before a PR can merge: `dotnet test AegisSchedule.sln`
+All 58 tests must pass before a PR can merge: `dotnet test AegisSchedule.sln`
 
 ---
 

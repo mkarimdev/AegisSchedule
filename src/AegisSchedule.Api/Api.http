@@ -386,3 +386,118 @@ X-Admin-Api-Key: {{adminKey}}
 DELETE {{baseUrl}}/api/admin/meetings/{{meetingId}}
 Accept: application/json
 X-Admin-Api-Key: {{adminKey}}
+
+###
+# 37. SIS Bulk Catalog Batch Sync
+POST {{baseUrl}}/api/admin/sis/sync
+Content-Type: application/json
+Accept: application/json
+X-Admin-Api-Key: {{adminKey}}
+
+{
+  "mode": "Upsert",
+  "term": {
+    "semester": "Fall",
+    "year": 2026,
+    "setAsCurrent": true
+  },
+  "courses": [
+    {
+      "code": "CS101",
+      "name": "Introduction to Computer Science",
+      "academicLevelNumber": 1,
+      "externalCourseId": "SIS-CS-101",
+      "activities": [
+        {
+          "type": "Lecture",
+          "groups": [
+            {
+              "name": "LEC-01",
+              "externalSectionId": "CRN-10001",
+              "meetings": [
+                {
+                  "dayOfWeek": "Sunday",
+                  "startTime": "08:30:00",
+                  "endTime": "10:00:00",
+                  "room": "Hall A"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Lab",
+          "groups": [
+            {
+              "name": "LAB-01",
+              "externalSectionId": "CRN-10002",
+              "meetings": [
+                {
+                  "dayOfWeek": "Tuesday",
+                  "startTime": "10:30:00",
+                  "endTime": "12:30:00",
+                  "room": "Lab 101"
+                }
+              ]
+            },
+            {
+              "name": "LAB-02",
+              "externalSectionId": "CRN-10003",
+              "meetings": [
+                {
+                  "dayOfWeek": "Thursday",
+                  "startTime": "12:30:00",
+                  "endTime": "14:30:00",
+                  "room": "Lab 102"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MATH101",
+      "name": "Calculus I",
+      "academicLevelNumber": 1,
+      "externalCourseId": "SIS-MATH-101",
+      "activities": [
+        {
+          "type": "Lecture",
+          "groups": [
+            {
+              "name": "LEC-01",
+              "externalSectionId": "CRN-20001",
+              "meetings": [
+                {
+                  "dayOfWeek": "Monday",
+                  "startTime": "09:00:00",
+                  "endTime": "11:00:00",
+                  "room": "Hall B"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Tutorial",
+          "groups": [
+            {
+              "name": "TUT-01",
+              "externalSectionId": "CRN-20002",
+              "meetings": [
+                {
+                  "dayOfWeek": "Wednesday",
+                  "startTime": "11:00:00",
+                  "endTime": "12:30:00",
+                  "room": "Room 204"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
