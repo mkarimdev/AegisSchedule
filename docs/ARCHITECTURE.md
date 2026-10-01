@@ -1,7 +1,7 @@
 # AegisSchedule — Architecture Reference
 
 > This document is the authoritative technical reference for the AegisSchedule system.
-> For the domain model and ubiquitous language, see [DOMAIN_MODEL.md](DOMAIN_MODEL.md).
+> Core domain entities follow a strict hierarchy: **Term** → **Course** → **CourseOffering** → **Activity** → **ActivityGroup** → **Meeting**.
 
 ---
 
